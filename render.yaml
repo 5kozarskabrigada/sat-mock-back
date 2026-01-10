@@ -1,0 +1,15 @@
+services:
+  # Backend API (NestJS)
+  - type: web
+    name: sat-platform-api
+    env: node
+    plan: free # or starter
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:prod
+    envVars:
+      - key: SUPABASE_URL
+        sync: false # You will enter this in Render Dashboard
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false # You will enter this in Render Dashboard
+      - key: PORT
+        value: 10000
