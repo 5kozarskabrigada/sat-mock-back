@@ -1,5 +1,5 @@
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, User } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -20,14 +20,18 @@ async function fixAdminRole() {
   console.log(`Fixing role for ${email}...`);
 
   // 1. Find the user in Auth to get the ID
-  const { data: { users }, error: searchError } = await supabase.auth.admin.listUsers();
+  const { data, error: searchError } = await supabase.auth.admin.listUsers();
   
   if (searchError) {
     console.error('Error listing users:', searchError);
     return;
   }
 
-  const adminUser = users.find(u => u.email === email);
+  // TypeScript might infer 'users' as never[] if it can't determine the type properly from the response
+  // We can explicitly cast it or check for existence
+  const users = data.users as User[];
+
+  const adminUser = users.find((u: User) => u.email === email);
 
   if (!adminUser) {
     console.error('Admin user not found in Auth! Please run reset-admin-password.ts first.');
@@ -73,7 +77,7 @@ async function fixAdminRole() {
   }
 
   // 4. Upsert Public Users Table
-  const { data, error: publicUpdateError } = await supabase
+  const { data: publicData, error: publicUpdateError } = await supabase
     .from('users')
     .upsert({ 
       id: adminUser.id,
@@ -88,7 +92,7 @@ async function fixAdminRole() {
   if (publicUpdateError) {
     console.error('Error updating public.users:', publicUpdateError);
   } else {
-    console.log('Public users table updated successfully:', data);
+    console.log('Public users table updated successfully:', publicData);
   }
 }
 
