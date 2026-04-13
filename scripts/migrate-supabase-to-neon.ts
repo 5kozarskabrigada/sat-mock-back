@@ -17,7 +17,6 @@ if (!targetUrl) {
 }
 
 const SOURCE_TABLES = [
-  'users',
   'classrooms',
   'student_classrooms',
   'exams',
@@ -25,9 +24,22 @@ const SOURCE_TABLES = [
   'student_exams',
   'student_answers',
   'activity_logs',
+  'sessions',
+  'verifications',
+];
+
+const TARGET_RESET_TABLES = [
+  'activity_logs',
+  'student_answers',
+  'student_exams',
+  'questions',
+  'exams',
+  'student_classrooms',
+  'classrooms',
   'accounts',
   'sessions',
   'verifications',
+  'users',
 ];
 
 function quoteIdent(identifier: string): string {
@@ -60,6 +72,25 @@ async function getColumns(client: PoolClient, schema: string, table: string): Pr
   );
 
   return result.rows.map((r) => r.column_name as string);
+}
+
+async function getColumnTypes(
+  client: PoolClient,
+  schema: string,
+  table: string,
+): Promise<Record<string, string>> {
+  const result = await client.query(
+    `
+      SELECT column_name, data_type
+      FROM information_schema.columns
+      WHERE table_schema = $1 AND table_name = $2
+    `,
+    [schema, table],
+  );
+
+  return Object.fromEntries(
+    result.rows.map((row) => [row.column_name as string, row.data_type as string]),
+  );
 }
 
 async function readRows(client: PoolClient, schema: string, table: string, columns: string[]): Promise<any[]> {
@@ -147,6 +178,9 @@ async function migrateAuthUsers(source: PoolClient, target: PoolClient): Promise
     return;
   }
 
+  const targetUserColumns = await getColumnTypes(target, 'public', 'users');
+  const targetAccountColumns = await getColumnTypes(target, 'public', 'accounts');
+
   const authUsers = await source.query(
     `
       SELECT
@@ -174,72 +208,67 @@ async function migrateAuthUsers(source: PoolClient, target: PoolClient): Promise
     const lastName = typeof metadata.last_name === 'string' ? metadata.last_name : null;
     const role = metadata.role === 'admin' ? 'admin' : 'student';
 
-    await target.query(
-      `
-        INSERT INTO public.users (
-          id, email, username, first_name, last_name, role, name, email_verified, created_at, updated_at
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, true, COALESCE($8, NOW()), COALESCE($9, NOW()))
-        ON CONFLICT (id) DO UPDATE
-        SET
-          email = EXCLUDED.email,
-          username = EXCLUDED.username,
-          first_name = EXCLUDED.first_name,
-          last_name = EXCLUDED.last_name,
-          role = EXCLUDED.role,
-          name = EXCLUDED.name,
-          email_verified = true,
-          updated_at = NOW()
-      `,
-      [
-        row.id,
-        row.email,
-        username,
-        firstName,
-        lastName,
-        role,
-        `${firstName || ''} ${lastName || ''}`.trim() || username,
-        row.created_at,
-        row.updated_at,
-      ],
-    );
+    const userRecord: Record<string, unknown> = {
+      id: row.id,
+      email: row.email,
+      username,
+      first_name: firstName,
+      last_name: lastName,
+      role,
+      name: `${firstName || ''} ${lastName || ''}`.trim() || username,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    };
+
+    if ('email_verified' in targetUserColumns) {
+      userRecord.email_verified = targetUserColumns.email_verified === 'boolean'
+        ? true
+        : row.updated_at || row.created_at || new Date();
+    }
+
+    if ('password_hash' in targetUserColumns) {
+      userRecord.password_hash = row.encrypted_password;
+    }
+
+    const userColumns = Object.keys(userRecord).filter((column) => column in targetUserColumns);
+    await upsertRows(target, 'public', 'users', userColumns, [userRecord]);
     usersUpserted += 1;
 
     if (row.encrypted_password) {
-      await target.query(
-        `
-          INSERT INTO public.accounts (
-            id,
-            user_id,
-            account_id,
-            provider_id,
-            password,
-            created_at,
-            updated_at
-          )
-          VALUES ($1, $2, $3, 'credential', $4, COALESCE($5, NOW()), COALESCE($6, NOW()))
-          ON CONFLICT (id) DO UPDATE
-          SET
-            user_id = EXCLUDED.user_id,
-            account_id = EXCLUDED.account_id,
-            provider_id = EXCLUDED.provider_id,
-            password = EXCLUDED.password,
-            updated_at = NOW()
-        `,
-        [
-          `cred_${row.id}`,
-          row.id,
-          row.email,
-          row.encrypted_password,
-          row.created_at,
-          row.updated_at,
-        ],
-      );
+      const accountRecord: Record<string, unknown> = {
+        id: targetAccountColumns.id === 'uuid' ? row.id : `cred_${row.id}`,
+        user_id: row.id,
+        account_id: row.email,
+        provider_id: 'credential',
+        password: row.encrypted_password,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+      };
+
+      const accountColumns = Object.keys(accountRecord).filter((column) => column in targetAccountColumns);
+      await upsertRows(target, 'public', 'accounts', accountColumns, [accountRecord]);
       accountsUpserted += 1;
     }
   }
 
   console.log(`Auth migration upserted ${usersUpserted} users and ${accountsUpserted} credential accounts.`);
+}
+
+async function resetTargetTables(target: PoolClient): Promise<void> {
+  const existingTables: string[] = [];
+
+  for (const table of TARGET_RESET_TABLES) {
+    if (await tableExists(target, 'public', table)) {
+      existingTables.push(`${quoteIdent('public')}.${quoteIdent(table)}`);
+    }
+  }
+
+  if (existingTables.length === 0) {
+    return;
+  }
+
+  await target.query(`TRUNCATE TABLE ${existingTables.join(', ')} CASCADE`);
+  console.log(`Cleared target tables: ${existingTables.join(', ')}`);
 }
 
 async function main() {
@@ -259,6 +288,8 @@ async function main() {
   try {
     console.log('Starting Supabase -> Neon migration...');
     await target.query('BEGIN');
+
+    await resetTargetTables(target);
 
     await migrateAuthUsers(source, target);
 

@@ -31,7 +31,7 @@ async function checkDatabase() {
     });
 
     // Check specific tables for columns
-    const importantTables = ['user', 'exams', 'questions', 'student_exams'];
+    const importantTables = ['users', 'accounts', 'exams', 'questions', 'student_exams'];
     
     for (const tableName of importantTables) {
       const tableExists = tables.rows.find(r => r.table_name === tableName);
