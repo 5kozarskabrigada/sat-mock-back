@@ -23,6 +23,12 @@ export class QuestionsController {
     return this.questionsService.findByExam(examId);
   }
 
+  @Get('deleted')
+  @Roles('admin')
+  async getDeleted() {
+    return this.questionsService.getDeleted();
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.questionsService.findOne(id);
@@ -50,5 +56,17 @@ export class QuestionsController {
   @Roles('admin')
   async delete(@Param('id') id: string) {
     return this.questionsService.softDelete(id);
+  }
+
+  @Post(':id/restore')
+  @Roles('admin')
+  async restore(@Param('id') id: string) {
+    return this.questionsService.restore(id);
+  }
+
+  @Delete(':id/permanent')
+  @Roles('admin')
+  async permanentlyDelete(@Param('id') id: string) {
+    return this.questionsService.permanentlyDelete(id);
   }
 }

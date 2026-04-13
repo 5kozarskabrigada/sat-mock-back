@@ -135,4 +135,42 @@ export class QuestionsService {
 
     return result.rows[0];
   }
+
+  async getDeleted() {
+    const result = await this.pool.query(
+      `SELECT q.*, e.title as exam_title
+       FROM questions q
+       LEFT JOIN exams e ON q.exam_id = e.id
+       WHERE q.deleted_at IS NOT NULL
+       ORDER BY q.deleted_at DESC`,
+    );
+
+    return result.rows;
+  }
+
+  async restore(id: string) {
+    const result = await this.pool.query(
+      'UPDATE questions SET deleted_at = NULL WHERE id = $1 RETURNING *',
+      [id],
+    );
+
+    if (result.rows.length === 0) {
+      throw new NotFoundException(`Question with ID ${id} not found`);
+    }
+
+    return result.rows[0];
+  }
+
+  async permanentlyDelete(id: string) {
+    const result = await this.pool.query(
+      'DELETE FROM questions WHERE id = $1 RETURNING *',
+      [id],
+    );
+
+    if (result.rows.length === 0) {
+      throw new NotFoundException(`Question with ID ${id} not found`);
+    }
+
+    return result.rows[0];
+  }
 }

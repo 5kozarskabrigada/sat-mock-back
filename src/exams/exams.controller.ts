@@ -59,4 +59,10 @@ export class ExamsController {
   async restore(@Param('id') id: string) {
     return this.examsService.restore(id);
   }
+
+  @Delete(':id/permanent')
+  @Roles('admin')
+  async permanentlyDelete(@Param('id') id: string) {
+    return this.examsService.permanentlyDelete(id);
+  }
 }

@@ -134,16 +134,58 @@ export class ExamsService {
   }
 
   async restore(id: string) {
-    const result = await this.pool.query(
-      'UPDATE exams SET deleted_at = NULL WHERE id = $1 RETURNING *',
-      [id],
-    );
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    if (result.rows.length === 0) {
-      throw new NotFoundException(`Exam with ID ${id} not found`);
+      await client.query(
+        'UPDATE questions SET deleted_at = NULL WHERE exam_id = $1',
+        [id],
+      );
+
+      const result = await client.query(
+        'UPDATE exams SET deleted_at = NULL WHERE id = $1 RETURNING *',
+        [id],
+      );
+
+      if (result.rows.length === 0) {
+        throw new NotFoundException(`Exam with ID ${id} not found`);
+      }
+
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
+  }
 
-    return result.rows[0];
+  async permanentlyDelete(id: string) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      await client.query('DELETE FROM questions WHERE exam_id = $1', [id]);
+
+      const result = await client.query(
+        'DELETE FROM exams WHERE id = $1 RETURNING *',
+        [id],
+      );
+
+      if (result.rows.length === 0) {
+        throw new NotFoundException(`Exam with ID ${id} not found`);
+      }
+
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async getDeleted() {
