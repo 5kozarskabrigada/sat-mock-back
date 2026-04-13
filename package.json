@@ -19,6 +19,7 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "migrate": "ts-node scripts/run-migration.ts",
+    "migrate:supabase": "ts-node scripts/migrate-supabase-to-neon.ts",
     "seed": "ts-node scripts/seed-database.ts",
     "db:setup": "npm run migrate && npm run seed"
   },
