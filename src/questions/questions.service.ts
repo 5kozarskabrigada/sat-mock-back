@@ -1,0 +1,138 @@
+import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Pool } from 'pg';
+
+@Injectable()
+export class QuestionsService {
+  constructor(@Inject('DATABASE_POOL') private pool: Pool) {}
+
+  async findByExam(examId: string) {
+    const result = await this.pool.query(
+      `SELECT * FROM questions 
+       WHERE exam_id = $1 AND deleted_at IS NULL 
+       ORDER BY section, module, created_at`,
+      [examId],
+    );
+    return result.rows;
+  }
+
+  async findOne(id: string) {
+    const result = await this.pool.query(
+      'SELECT * FROM questions WHERE id = $1 AND deleted_at IS NULL',
+      [id],
+    );
+
+    if (result.rows.length === 0) {
+      throw new NotFoundException(`Question with ID ${id} not found`);
+    }
+
+    return result.rows[0];
+  }
+
+  async create(questionData: any) {
+    const result = await this.pool.query(
+      `INSERT INTO questions (exam_id, section, module, content, correct_answer, explanation, domain, equation_latex, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+       RETURNING *`,
+      [
+        questionData.examId,
+        questionData.section,
+        questionData.module,
+        JSON.stringify(questionData.content),
+        questionData.correctAnswer,
+        questionData.explanation,
+        questionData.domain,
+        questionData.equationLatex,
+      ],
+    );
+
+    return result.rows[0];
+  }
+
+  async createBulk(examId: string, questions: any[]) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const createdQuestions: any[] = [];
+      for (const q of questions) {
+        const result = await client.query(
+          `INSERT INTO questions (exam_id, section, module, content, correct_answer, explanation, domain, equation_latex, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+           RETURNING *`,
+          [
+            examId,
+            q.section,
+            q.module,
+            JSON.stringify(q.content),
+            q.correctAnswer,
+            q.explanation,
+            q.domain,
+            q.equationLatex,
+          ],
+        );
+        createdQuestions.push(result.rows[0]);
+      }
+
+      await client.query('COMMIT');
+      return createdQuestions;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async update(id: string, questionData: any) {
+    const fields: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (questionData.content !== undefined) {
+      fields.push(`content = $${paramIndex++}`);
+      values.push(JSON.stringify(questionData.content));
+    }
+    if (questionData.correctAnswer !== undefined) {
+      fields.push(`correct_answer = $${paramIndex++}`);
+      values.push(questionData.correctAnswer);
+    }
+    if (questionData.explanation !== undefined) {
+      fields.push(`explanation = $${paramIndex++}`);
+      values.push(questionData.explanation);
+    }
+    if (questionData.domain !== undefined) {
+      fields.push(`domain = $${paramIndex++}`);
+      values.push(questionData.domain);
+    }
+    if (questionData.equationLatex !== undefined) {
+      fields.push(`equation_latex = $${paramIndex++}`);
+      values.push(questionData.equationLatex);
+    }
+
+    values.push(id);
+
+    const result = await this.pool.query(
+      `UPDATE questions SET ${fields.join(', ')} WHERE id = $${paramIndex} AND deleted_at IS NULL RETURNING *`,
+      values,
+    );
+
+    if (result.rows.length === 0) {
+      throw new NotFoundException(`Question with ID ${id} not found`);
+    }
+
+    return result.rows[0];
+  }
+
+  async softDelete(id: string) {
+    const result = await this.pool.query(
+      'UPDATE questions SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING *',
+      [id],
+    );
+
+    if (result.rows.length === 0) {
+      throw new NotFoundException(`Question with ID ${id} not found`);
+    }
+
+    return result.rows[0];
+  }
+}

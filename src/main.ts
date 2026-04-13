@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
 import {
   FastifyAdapter,
   NestFastifyApplication,
@@ -10,8 +11,30 @@ async function bootstrap() {
     AppModule,
     new FastifyAdapter()
   );
-  // Enable CORS
-  app.enableCors();
-  await app.listen(process.env.PORT ?? 3001, '0.0.0.0'); // Port 3001 for API to avoid conflict with Next.js (3000)
+
+  // Enable CORS for frontend - allow multiple origins
+  app.enableCors({
+    origin: process.env.CORS_ORIGIN ? 
+      process.env.CORS_ORIGIN.split(',') : 
+      ['http://localhost:3000', 'https://sat-mock-front.vercel.app'],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
+
+  // Global validation pipe
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+    }),
+  );
+
+  // Global prefix
+  app.setGlobalPrefix('api');
+
+  const port = process.env.PORT ?? 3001;
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 API server running on http://0.0.0.0:${port}/api`);
 }
 bootstrap();

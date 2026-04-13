@@ -3,13 +3,18 @@ services:
   - type: web
     name: sat-platform-api
     env: node
-    plan: free # or starter
-    buildCommand: npm install && npm run build
+    plan: free
+    buildCommand: npm install && npm run build && npm run migrate
     startCommand: npm run start:prod
     envVars:
-      - key: SUPABASE_URL
-        sync: false # You will enter this in Render Dashboard
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false # You will enter this in Render Dashboard
+      - key: DATABASE_URL
+        sync: false # Add your Neon PostgreSQL connection string in Render Dashboard
+      - key: JWT_SECRET
+        generateValue: true # Render will auto-generate a secure secret
       - key: PORT
-        value: 10000
+        value: 3001
+      - key: NODE_ENV
+        value: production
+      - key: CORS_ORIGIN
+        value: https://sat-mock-front.vercel.app,http://localhost:3000
+    healthCheckPath: /api

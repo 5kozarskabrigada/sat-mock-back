@@ -1,0 +1,230 @@
+-- SAT Mock Exam Platform - Complete Database Schema
+-- Compatible with Better Auth + NestJS Backend
+
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- ============================================
+-- BETTER AUTH TABLES
+-- ============================================
+
+-- Users table (Better Auth)
+CREATE TABLE IF NOT EXISTS public.user (
+  id TEXT PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+  name TEXT,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Accounts table (Better Auth - for password auth)
+CREATE TABLE IF NOT EXISTS public.account (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES public.user(id) ON DELETE CASCADE,
+  account_id TEXT NOT NULL,
+  provided_id TEXT NOT NULL,
+  access_token TEXT,
+  refresh_token TEXT,
+  id_token TEXT,
+  access_token_expires_at TIMESTAMP WITH TIME ZONE,
+  refresh_token_expires_at TIMESTAMP WITH TIME ZONE,
+  scope TEXT,
+  password TEXT,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Sessions table (Better Auth)
+CREATE TABLE IF NOT EXISTS public.session (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES public.user(id) ON DELETE CASCADE,
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  token TEXT UNIQUE NOT NULL,
+  ip_address TEXT,
+  user_agent TEXT,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Verification table (Better Auth)
+CREATE TABLE IF NOT EXISTS public.verification (
+  id TEXT PRIMARY KEY,
+  identifier TEXT NOT NULL,
+  value TEXT NOT NULL,
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================
+-- APPLICATION TABLES
+-- ============================================
+
+-- Add role and profile fields to user table
+ALTER TABLE public.user ADD COLUMN IF NOT EXISTS role TEXT CHECK (role IN ('admin', 'student')) DEFAULT 'student';
+ALTER TABLE public.user ADD COLUMN IF NOT EXISTS first_name TEXT;
+ALTER TABLE public.user ADD COLUMN IF NOT EXISTS last_name TEXT;
+ALTER TABLE public.user ADD COLUMN IF NOT EXISTS username TEXT UNIQUE;
+
+-- Classrooms table
+CREATE TABLE IF NOT EXISTS public.classrooms (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  created_by TEXT REFERENCES public.user(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Student-Classrooms join table
+CREATE TABLE IF NOT EXISTS public.student_classrooms (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  student_id TEXT REFERENCES public.user(id) ON DELETE CASCADE,
+  classroom_id UUID REFERENCES public.classrooms(id) ON DELETE CASCADE,
+  joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  UNIQUE(student_id, classroom_id)
+);
+
+-- Exams table
+CREATE TABLE IF NOT EXISTS public.exams (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  code TEXT UNIQUE,
+  status TEXT CHECK (status IN ('draft', 'active', 'archived')) DEFAULT 'draft',
+  classroom_id UUID REFERENCES public.classrooms(id) ON DELETE SET NULL,
+  created_by TEXT REFERENCES public.user(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Questions table
+CREATE TABLE IF NOT EXISTS public.questions (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  exam_id UUID REFERENCES public.exams(id) ON DELETE CASCADE,
+  section TEXT CHECK (section IN ('reading_writing', 'math')) NOT NULL,
+  module INTEGER CHECK (module IN (1, 2)) NOT NULL,
+  order_index INTEGER DEFAULT 0,
+  domain TEXT,
+  skill TEXT,
+  difficulty TEXT,
+  question_text TEXT NOT NULL,
+  question_latex TEXT,
+  question_image_url TEXT,
+  answer_type TEXT CHECK (answer_type IN ('multiple_choice', 'grid_in')) DEFAULT 'multiple_choice',
+  options JSONB,
+  correct_answer TEXT NOT NULL,
+  explanation TEXT,
+  explanation_latex TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Student Exams table
+CREATE TABLE IF NOT EXISTS public.student_exams (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  student_id TEXT REFERENCES public.user(id) ON DELETE CASCADE,
+  exam_id UUID REFERENCES public.exams(id) ON DELETE CASCADE,
+  status TEXT CHECK (status IN ('in_progress', 'completed', 'disqualified')) DEFAULT 'in_progress',
+  started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  completed_at TIMESTAMP WITH TIME ZONE,
+  lockdown_violations INTEGER DEFAULT 0,
+  reading_writing_score INTEGER,
+  math_score INTEGER,
+  total_score INTEGER,
+  score_detail JSONB,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+-- Student Answers table
+CREATE TABLE IF NOT EXISTS public.student_answers (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  student_exam_id UUID REFERENCES public.student_exams(id) ON DELETE CASCADE,
+  question_id UUID REFERENCES public.questions(id) ON DELETE CASCADE,
+  answer_value TEXT,
+  is_correct BOOLEAN DEFAULT FALSE,
+  time_spent INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  UNIQUE(student_exam_id, question_id)
+);
+
+-- Activity Logs table
+CREATE TABLE IF NOT EXISTS public.activity_logs (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id TEXT REFERENCES public.user(id) ON DELETE CASCADE,
+  student_exam_id UUID REFERENCES public.student_exams(id) ON DELETE CASCADE,
+  exam_id UUID REFERENCES public.exams(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  details TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+-- ============================================
+-- INDEXES FOR PERFORMANCE
+-- ============================================
+
+-- Better Auth indexes
+CREATE INDEX IF NOT EXISTS idx_account_user_id ON public.account(user_id);
+CREATE INDEX IF NOT EXISTS idx_session_user_id ON public.session(user_id);
+CREATE INDEX IF NOT EXISTS idx_session_token ON public.session(token);
+
+-- Application indexes
+CREATE INDEX IF NOT EXISTS idx_exams_status ON public.exams(status);
+CREATE INDEX IF NOT EXISTS idx_exams_classroom ON public.exams(classroom_id);
+CREATE INDEX IF NOT EXISTS idx_exams_created_by ON public.exams(created_by);
+CREATE INDEX IF NOT EXISTS idx_exams_deleted ON public.exams(deleted_at) WHERE deleted_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_questions_exam_id ON public.questions(exam_id);
+CREATE INDEX IF NOT EXISTS idx_questions_section ON public.questions(section);
+CREATE INDEX IF NOT EXISTS idx_questions_deleted ON public.questions(deleted_at) WHERE deleted_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_student_exams_student_id ON public.student_exams(student_id);
+CREATE INDEX IF NOT EXISTS idx_student_exams_exam_id ON public.student_exams(exam_id);
+CREATE INDEX IF NOT EXISTS idx_student_exams_status ON public.student_exams(status);
+
+CREATE INDEX IF NOT EXISTS idx_student_answers_student_exam ON public.student_answers(student_exam_id);
+CREATE INDEX IF NOT EXISTS idx_student_answers_question ON public.student_answers(question_id);
+
+CREATE INDEX IF NOT EXISTS idx_activity_logs_user_id ON public.activity_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_student_exam_id ON public.activity_logs(student_exam_id);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_type ON public.activity_logs(type);
+
+CREATE INDEX IF NOT EXISTS idx_classrooms_created_by ON public.classrooms(created_by);
+CREATE INDEX IF NOT EXISTS idx_classrooms_deleted ON public.classrooms(deleted_at) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_student_classrooms_student ON public.student_classrooms(student_id);
+CREATE INDEX IF NOT EXISTS idx_student_classrooms_classroom ON public.student_classrooms(classroom_id);
+
+-- ============================================
+-- UPDATED_AT TRIGGER FUNCTION
+-- ============================================
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Apply triggers to tables with updated_at
+DO $$
+DECLARE
+  t text;
+BEGIN
+  FOR t IN 
+    SELECT table_name 
+    FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+    AND column_name = 'updated_at'
+    AND table_name IN ('user', 'account', 'session', 'verification', 'classrooms', 'exams', 'questions', 'student_exams', 'student_answers')
+  LOOP
+    EXECUTE format('DROP TRIGGER IF EXISTS update_%I_updated_at ON public.%I', t, t);
+    EXECUTE format('CREATE TRIGGER update_%I_updated_at BEFORE UPDATE ON public.%I FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()', t, t);
+  END LOOP;
+END$$;

@@ -1,0 +1,54 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
+import { QuestionsService } from './questions.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+
+@Controller('questions')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class QuestionsController {
+  constructor(private questionsService: QuestionsService) {}
+
+  @Get('exam/:examId')
+  async findByExam(@Param('examId') examId: string) {
+    return this.questionsService.findByExam(examId);
+  }
+
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    return this.questionsService.findOne(id);
+  }
+
+  @Post()
+  @Roles('admin')
+  async create(@Body() questionData: any) {
+    return this.questionsService.create(questionData);
+  }
+
+  @Post('bulk')
+  @Roles('admin')
+  async createBulk(@Body() data: { examId: string; questions: any[] }) {
+    return this.questionsService.createBulk(data.examId, data.questions);
+  }
+
+  @Put(':id')
+  @Roles('admin')
+  async update(@Param('id') id: string, @Body() questionData: any) {
+    return this.questionsService.update(id, questionData);
+  }
+
+  @Delete(':id')
+  @Roles('admin')
+  async delete(@Param('id') id: string) {
+    return this.questionsService.softDelete(id);
+  }
+}
