@@ -10,10 +10,12 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async validateUser(email: string, password: string): Promise<any> {
+  async validateUser(identifier: string, password: string): Promise<any> {
     const result = await this.pool.query(
-      'SELECT id, email, role, password_hash FROM users WHERE email = $1',
-      [email],
+      `SELECT id, email, username, first_name, last_name, role, password_hash
+       FROM users
+       WHERE email = $1 OR username = $1`,
+      [identifier],
     );
 
     const user = result.rows[0];
