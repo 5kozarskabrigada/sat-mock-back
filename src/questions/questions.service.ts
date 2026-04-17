@@ -5,11 +5,22 @@ import { Pool } from 'pg';
 export class QuestionsService {
   constructor(@Inject('DATABASE_POOL') private pool: Pool) {}
 
+  private async getNextOrderIndex(examId: string, section: string, module: number) {
+    const result = await this.pool.query(
+      `SELECT COALESCE(MAX(order_index), 0) AS max_order
+       FROM questions
+       WHERE exam_id = $1 AND section = $2 AND module = $3 AND deleted_at IS NULL`,
+      [examId, section, module],
+    );
+
+    return Number(result.rows[0]?.max_order || 0) + 1;
+  }
+
   async findByExam(examId: string) {
     const result = await this.pool.query(
       `SELECT * FROM questions 
        WHERE exam_id = $1 AND deleted_at IS NULL 
-       ORDER BY section, module, created_at`,
+       ORDER BY section, module, order_index, created_at`,
       [examId],
     );
     return result.rows;
@@ -37,9 +48,14 @@ export class QuestionsService {
       throw new BadRequestException('Missing required fields: exam_id/examId, section, module, content, correct_answer/correctAnswer');
     }
 
+    const orderIndex =
+      questionData.order_index ??
+      questionData.orderIndex ??
+      (await this.getNextOrderIndex(examId, questionData.section, questionData.module));
+
     const result = await this.pool.query(
-      `INSERT INTO questions (exam_id, section, module, content, correct_answer, explanation, domain, equation_latex, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+      `INSERT INTO questions (exam_id, section, module, content, correct_answer, explanation, domain, equation_latex, order_index, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
        RETURNING *`,
       [
         examId,
@@ -50,6 +66,7 @@ export class QuestionsService {
         questionData.explanation,
         questionData.domain,
         equationLatex,
+        orderIndex,
       ],
     );
 
@@ -70,9 +87,12 @@ export class QuestionsService {
 
       const createdQuestions: any[] = [];
       for (const q of questions) {
+        const orderIndex =
+          q.order_index ?? q.orderIndex ?? (await this.getNextOrderIndex(examId, q.section, q.module));
+
         const result = await client.query(
-          `INSERT INTO questions (exam_id, section, module, content, correct_answer, explanation, domain, equation_latex, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+          `INSERT INTO questions (exam_id, section, module, content, correct_answer, explanation, domain, equation_latex, order_index, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
            RETURNING *`,
           [
             examId,
@@ -83,6 +103,7 @@ export class QuestionsService {
             q.explanation,
             q.domain,
             q.equation_latex ?? q.equationLatex,
+            orderIndex,
           ],
         );
         createdQuestions.push(result.rows[0]);
@@ -110,6 +131,11 @@ export class QuestionsService {
     if (questionData.module !== undefined) {
       fields.push(`module = $${paramIndex++}`);
       values.push(questionData.module);
+    }
+    const orderIndex = questionData.order_index ?? questionData.orderIndex;
+    if (orderIndex !== undefined) {
+      fields.push(`order_index = $${paramIndex++}`);
+      values.push(orderIndex);
     }
 
     if (questionData.content !== undefined) {
@@ -202,5 +228,59 @@ export class QuestionsService {
     }
 
     return result.rows[0];
+  }
+
+  async reorderByExam(
+    examId: string,
+    data: { section: string; module: number; questionIdsInOrder: string[] },
+  ) {
+    const { section, module, questionIdsInOrder } = data;
+
+    if (!section || module === undefined || !Array.isArray(questionIdsInOrder) || questionIdsInOrder.length === 0) {
+      throw new BadRequestException('section, module, and questionIdsInOrder are required');
+    }
+
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const validRows = await client.query(
+        `SELECT id
+         FROM questions
+         WHERE exam_id = $1
+           AND section = $2
+           AND module = $3
+           AND deleted_at IS NULL`,
+        [examId, section, module],
+      );
+
+      const validIds = new Set(validRows.rows.map((row) => row.id));
+      if (validIds.size !== questionIdsInOrder.length) {
+        throw new BadRequestException('questionIdsInOrder must include all questions in this section/module');
+      }
+
+      for (const id of questionIdsInOrder) {
+        if (!validIds.has(id)) {
+          throw new BadRequestException('questionIdsInOrder contains invalid question ids');
+        }
+      }
+
+      for (let i = 0; i < questionIdsInOrder.length; i++) {
+        await client.query(
+          `UPDATE questions
+           SET order_index = $1
+           WHERE id = $2 AND exam_id = $3 AND deleted_at IS NULL`,
+          [i + 1, questionIdsInOrder[i], examId],
+        );
+      }
+
+      await client.query('COMMIT');
+      return { success: true };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }

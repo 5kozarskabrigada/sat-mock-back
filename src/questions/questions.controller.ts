@@ -52,6 +52,15 @@ export class QuestionsController {
     return this.questionsService.update(id, questionData);
   }
 
+  @Put('exam/:examId/reorder')
+  @Roles('admin')
+  async reorderByExam(
+    @Param('examId') examId: string,
+    @Body() data: { section: string; module: number; questionIdsInOrder: string[] },
+  ) {
+    return this.questionsService.reorderByExam(examId, data);
+  }
+
   @Delete(':id')
   @Roles('admin')
   async delete(@Param('id') id: string) {
