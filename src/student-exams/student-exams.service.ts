@@ -1,9 +1,10 @@
-import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { Pool } from 'pg';
 
 @Injectable()
 export class StudentExamsService {
   constructor(@Inject('DATABASE_POOL') private pool: Pool) {}
+  private readonly logger = new Logger(StudentExamsService.name);
 
   private isRetryableDbError(error: any) {
     return error?.code === '40P01' || error?.code === '40001';
@@ -18,10 +19,18 @@ export class StudentExamsService {
       } catch (error: any) {
         lastError = error;
         if (!this.isRetryableDbError(error) || attempt === maxAttempts) {
+          if (this.isRetryableDbError(error)) {
+            this.logger.error(
+              `Retryable DB error exhausted after ${attempt}/${maxAttempts} attempts (code=${error?.code || 'unknown'})`,
+            );
+          }
           throw error;
         }
 
         const backoffMs = 100 * attempt;
+        this.logger.warn(
+          `Retrying DB transaction after ${error?.code || 'unknown'} (attempt ${attempt}/${maxAttempts}, backoff=${backoffMs}ms)`,
+        );
         await new Promise((resolve) => setTimeout(resolve, backoffMs));
       }
     }
