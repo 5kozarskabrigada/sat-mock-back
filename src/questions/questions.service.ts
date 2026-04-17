@@ -1,4 +1,4 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, BadRequestException, NotFoundException } from '@nestjs/common';
 import { Pool } from 'pg';
 
 @Injectable()
@@ -29,19 +29,27 @@ export class QuestionsService {
   }
 
   async create(questionData: any) {
+    const examId = questionData.exam_id ?? questionData.examId;
+    const correctAnswer = questionData.correct_answer ?? questionData.correctAnswer;
+    const equationLatex = questionData.equation_latex ?? questionData.equationLatex;
+
+    if (!examId || !questionData.section || questionData.module === undefined || !questionData.content || !correctAnswer) {
+      throw new BadRequestException('Missing required fields: exam_id/examId, section, module, content, correct_answer/correctAnswer');
+    }
+
     const result = await this.pool.query(
       `INSERT INTO questions (exam_id, section, module, content, correct_answer, explanation, domain, equation_latex, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
        RETURNING *`,
       [
-        questionData.exam_id ?? questionData.examId,
+        examId,
         questionData.section,
         questionData.module,
         JSON.stringify(questionData.content),
-        questionData.correct_answer ?? questionData.correctAnswer,
+        correctAnswer,
         questionData.explanation,
         questionData.domain,
-        questionData.equation_latex ?? questionData.equationLatex,
+        equationLatex,
       ],
     );
 
@@ -49,6 +57,13 @@ export class QuestionsService {
   }
 
   async createBulk(examId: string, questions: any[]) {
+    if (!examId) {
+      throw new BadRequestException('Missing required field: exam_id/examId');
+    }
+    if (!Array.isArray(questions) || questions.length === 0) {
+      throw new BadRequestException('Questions array is required');
+    }
+
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -88,6 +103,15 @@ export class QuestionsService {
     const values: any[] = [];
     let paramIndex = 1;
 
+    if (questionData.section !== undefined) {
+      fields.push(`section = $${paramIndex++}`);
+      values.push(questionData.section);
+    }
+    if (questionData.module !== undefined) {
+      fields.push(`module = $${paramIndex++}`);
+      values.push(questionData.module);
+    }
+
     if (questionData.content !== undefined) {
       fields.push(`content = $${paramIndex++}`);
       values.push(JSON.stringify(questionData.content));
@@ -109,6 +133,10 @@ export class QuestionsService {
     if (equationLatex !== undefined) {
       fields.push(`equation_latex = $${paramIndex++}`);
       values.push(equationLatex);
+    }
+
+    if (fields.length === 0) {
+      throw new BadRequestException('No valid fields provided for update');
     }
 
     values.push(id);

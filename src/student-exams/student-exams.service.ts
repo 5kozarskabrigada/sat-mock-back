@@ -119,6 +119,18 @@ export class StudentExamsService {
     try {
       await client.query('BEGIN');
 
+      const normalizedAnswers = Array.from(
+        new Map(
+          (answers || [])
+            .filter((a) => a?.questionId)
+            .map((a) => [a.questionId, (a.answerValue ?? '').toString()]),
+        ).entries(),
+      ).map(([questionId, answerValue]) => ({ questionId, answerValue }));
+
+      if (normalizedAnswers.length === 0) {
+        throw new BadRequestException('No valid answers provided');
+      }
+
       // Verify student owns this exam attempt
       const verifyResult = await client.query(
         'SELECT * FROM student_exams WHERE id = $1 AND student_id = $2 AND status = $3',
@@ -129,19 +141,24 @@ export class StudentExamsService {
         throw new BadRequestException('Invalid exam attempt or exam already completed');
       }
 
-      // Batch upsert answers
-      const savedAnswers: any[] = [];
-      for (const answer of answers) {
-        const result = await client.query(
-          `INSERT INTO student_answers (student_exam_id, question_id, answer_value, created_at)
-           VALUES ($1, $2, $3, NOW())
-           ON CONFLICT (student_exam_id, question_id)
-           DO UPDATE SET answer_value = $3, created_at = NOW()
-           RETURNING *`,
-          [studentExamId, answer.questionId, answer.answerValue],
-        );
-        savedAnswers.push(result.rows[0]);
-      }
+      // Upsert answers in a single query for consistency and fewer network round-trips.
+      const savedAnswersResult = await client.query(
+        `INSERT INTO student_answers (student_exam_id, question_id, answer_value, created_at, updated_at)
+         SELECT $1, a.question_id, a.answer_value, NOW(), NOW()
+         FROM jsonb_to_recordset($2::jsonb) AS a(question_id uuid, answer_value text)
+         ON CONFLICT (student_exam_id, question_id)
+         DO UPDATE SET answer_value = EXCLUDED.answer_value, updated_at = NOW()
+         RETURNING *`,
+        [
+          studentExamId,
+          JSON.stringify(
+            normalizedAnswers.map((answer) => ({
+              question_id: answer.questionId,
+              answer_value: answer.answerValue,
+            })),
+          ),
+        ],
+      );
 
       // Update student_exam updated_at timestamp
       await client.query(
@@ -150,7 +167,7 @@ export class StudentExamsService {
       );
 
       await client.query('COMMIT');
-      return savedAnswers;
+      return savedAnswersResult.rows;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

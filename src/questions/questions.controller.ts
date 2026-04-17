@@ -42,8 +42,8 @@ export class QuestionsController {
 
   @Post('bulk')
   @Roles('admin')
-  async createBulk(@Body() data: { examId: string; questions: any[] }) {
-    return this.questionsService.createBulk(data.examId, data.questions);
+  async createBulk(@Body() data: { examId?: string; exam_id?: string; questions: any[] }) {
+    return this.questionsService.createBulk(data.exam_id ?? data.examId ?? '', data.questions);
   }
 
   @Put(':id')

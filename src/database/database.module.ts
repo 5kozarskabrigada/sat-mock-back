@@ -8,14 +8,22 @@ import { Pool } from 'pg';
     {
       provide: 'DATABASE_POOL',
       useFactory: () => {
+        const isProduction = process.env.NODE_ENV === 'production';
         const pool = new Pool({
           connectionString: process.env.DATABASE_URL,
-          // Optimized pool settings for concurrent operations
-          max: 20, // Maximum number of clients in the pool
-          idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-          connectionTimeoutMillis: 2000, // Return error after 2 seconds if no connection available
-          // Enable SSL for Neon
-          ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+          // Neon-friendly pool settings for bursty traffic and serverless networking.
+          max: 15,
+          min: 2,
+          idleTimeoutMillis: 45000,
+          connectionTimeoutMillis: 10000,
+          keepAlive: true,
+          allowExitOnIdle: false,
+          maxUses: 7500,
+          ssl: isProduction
+            ? {
+                rejectUnauthorized: false,
+              }
+            : false,
         });
 
         // Handle pool errors
