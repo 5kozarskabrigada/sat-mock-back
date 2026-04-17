@@ -34,14 +34,14 @@ export class QuestionsService {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
        RETURNING *`,
       [
-        questionData.examId,
+        questionData.exam_id ?? questionData.examId,
         questionData.section,
         questionData.module,
         JSON.stringify(questionData.content),
-        questionData.correctAnswer,
+        questionData.correct_answer ?? questionData.correctAnswer,
         questionData.explanation,
         questionData.domain,
-        questionData.equationLatex,
+        questionData.equation_latex ?? questionData.equationLatex,
       ],
     );
 
@@ -64,10 +64,10 @@ export class QuestionsService {
             q.section,
             q.module,
             JSON.stringify(q.content),
-            q.correctAnswer,
+            q.correct_answer ?? q.correctAnswer,
             q.explanation,
             q.domain,
-            q.equationLatex,
+            q.equation_latex ?? q.equationLatex,
           ],
         );
         createdQuestions.push(result.rows[0]);
@@ -92,9 +92,10 @@ export class QuestionsService {
       fields.push(`content = $${paramIndex++}`);
       values.push(JSON.stringify(questionData.content));
     }
-    if (questionData.correctAnswer !== undefined) {
+    const correctAnswer = questionData.correct_answer ?? questionData.correctAnswer;
+    if (correctAnswer !== undefined) {
       fields.push(`correct_answer = $${paramIndex++}`);
-      values.push(questionData.correctAnswer);
+      values.push(correctAnswer);
     }
     if (questionData.explanation !== undefined) {
       fields.push(`explanation = $${paramIndex++}`);
@@ -104,9 +105,10 @@ export class QuestionsService {
       fields.push(`domain = $${paramIndex++}`);
       values.push(questionData.domain);
     }
-    if (questionData.equationLatex !== undefined) {
+    const equationLatex = questionData.equation_latex ?? questionData.equationLatex;
+    if (equationLatex !== undefined) {
       fields.push(`equation_latex = $${paramIndex++}`);
-      values.push(questionData.equationLatex);
+      values.push(equationLatex);
     }
 
     values.push(id);
