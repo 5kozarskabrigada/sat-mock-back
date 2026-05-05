@@ -10,6 +10,7 @@ import { QuestionsModule } from './questions/questions.module';
 import { StudentExamsModule } from './student-exams/student-exams.module';
 import { ClassroomsModule } from './classrooms/classrooms.module';
 import { ActivityLogsModule } from './activity-logs/activity-logs.module';
+import { UsageModule } from './usage/usage.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ActivityLogsModule } from './activity-logs/activity-logs.module';
     StudentExamsModule,
     ClassroomsModule,
     ActivityLogsModule,
+    UsageModule,
   ],
   controllers: [AppController],
   providers: [AppService],
