@@ -41,9 +41,9 @@ jobs:
               --restart unless-stopped \
               -p 3001:3001 \
               -e NODE_ENV=production \
-              -e DATABASE_URL=${{ secrets.DATABASE_URL }} \
-              -e JWT_SECRET=${{ secrets.JWT_SECRET }} \
-              -e CORS_ORIGIN=${{ secrets.CORS_ORIGIN }} \
+              -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+              -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+              -e CORS_ORIGIN="${{ secrets.CORS_ORIGIN }}" \
               -e PORT=3001 \
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             
