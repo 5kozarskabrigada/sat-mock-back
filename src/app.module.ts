@@ -11,6 +11,7 @@ import { StudentExamsModule } from './student-exams/student-exams.module';
 import { ClassroomsModule } from './classrooms/classrooms.module';
 import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 import { UsageModule } from './usage/usage.module';
+import { ImagesModule } from './images/images.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { UsageModule } from './usage/usage.module';
     ClassroomsModule,
     ActivityLogsModule,
     UsageModule,
+    ImagesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -5,11 +5,21 @@ import {
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
+import multipart from '@fastify/multipart';
 
 async function bootstrap() {
+  const adapter = new FastifyAdapter();
+  
+  // Register multipart plugin for file uploads
+  adapter.register(multipart, {
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB
+    },
+  });
+
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter()
+    adapter,
   );
 
   // Enable CORS for frontend - allow multiple origins
