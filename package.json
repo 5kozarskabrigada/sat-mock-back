@@ -19,7 +19,6 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "migrate": "ts-node scripts/run-migration.ts",
-    "migrate:supabase": "ts-node scripts/migrate-supabase-to-neon.ts",
     "seed": "ts-node scripts/seed-database.ts",
     "seed:admin": "ts-node scripts/seed-admin-neon.ts",
     "db:setup": "npm run migrate && npm run seed"
@@ -31,7 +30,6 @@
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-fastify": "^11.1.11",
-    "@supabase/supabase-js": "^2.103.0",
     "@types/bcrypt": "^5.0.2",
     "@types/passport-jwt": "^4.0.1",
     "@types/pg": "^8.11.11",
