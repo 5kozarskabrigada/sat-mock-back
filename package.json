@@ -21,6 +21,7 @@
     "migrate": "ts-node scripts/run-migration.ts",
     "migrate:supabase": "ts-node scripts/migrate-supabase-to-neon.ts",
     "seed": "ts-node scripts/seed-database.ts",
+    "seed:admin": "ts-node scripts/seed-admin-neon.ts",
     "db:setup": "npm run migrate && npm run seed"
   },
   "dependencies": {
