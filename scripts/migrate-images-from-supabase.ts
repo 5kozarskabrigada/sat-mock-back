@@ -20,13 +20,13 @@ async function migrateImages() {
     // Step 1: Find all questions with Supabase image URLs
     console.log('📊 Step 1: Finding questions with Supabase images...');
     const questionsResult = await pool.query(
-      `SELECT id, image_url, image_description 
+      `SELECT id, question_image_url, question_text 
        FROM questions 
-       WHERE image_url IS NOT NULL 
-       AND image_url != ''
+       WHERE question_image_url IS NOT NULL 
+       AND question_image_url != ''
        AND (
-         image_url LIKE '%supabase.co%' 
-         OR image_url LIKE '%supabase.in%'
+         question_image_url LIKE '%supabase.co%' 
+         OR question_image_url LIKE '%supabase.in%'
        )
        ORDER BY created_at DESC`
     );
@@ -50,10 +50,10 @@ async function migrateImages() {
 
       try {
         console.log(`${progress} Migrating image for question ${question.id}...`);
-        console.log(`   Old URL: ${question.image_url}`);
+        console.log(`   Old URL: ${question.question_image_url}`);
 
         // Download image from Supabase
-        const response = await fetch(question.image_url);
+        const response = await fetch(question.question_image_url);
         if (!response.ok) {
           throw new Error(`Failed to download: HTTP ${response.status}`);
         }
@@ -63,7 +63,7 @@ async function migrateImages() {
         const contentType = response.headers.get('content-type') || 'image/jpeg';
 
         // Extract filename from URL or generate new one
-        const urlPath = new URL(question.image_url).pathname;
+        const urlPath = new URL(question.question_image_url).pathname;
         const originalFilename = path.basename(urlPath);
         const extension = path.extname(originalFilename) || '.jpg';
         const filename = `migrated_${question.id}_${Date.now()}${extension}`;
@@ -85,7 +85,7 @@ async function migrateImages() {
         // Update question with new URL
         await pool.query(
           `UPDATE questions 
-           SET image_url = $1,
+           SET question_image_url = $1,
                updated_at = NOW()
            WHERE id = $2`,
           [newImageUrl, question.id]
@@ -130,8 +130,8 @@ async function migrateImages() {
     const remainingResult = await pool.query(
       `SELECT COUNT(*) as count 
        FROM questions 
-       WHERE image_url IS NOT NULL 
-       AND (image_url LIKE '%supabase.co%' OR image_url LIKE '%supabase.in%')`
+       WHERE question_image_url IS NOT NULL 
+       AND (question_image_url LIKE '%supabase.co%' OR question_image_url LIKE '%supabase.in%')`
     );
     
     const remaining = parseInt(remainingResult.rows[0].count);
