@@ -9,7 +9,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { ImagesService } from './images.service';
-import { FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = [
