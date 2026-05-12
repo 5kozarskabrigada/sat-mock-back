@@ -1,156 +1,206 @@
-// Script to migrate existing Supabase Storage images to Neon PostgreSQL
+// Script to migrate existing Supabase Storage images to Neon PostgreSQL.
+// Handles both questions.question_image_url and URLs nested in questions.content JSON.
 // Run: npx ts-node scripts/migrate-images-from-supabase.ts
 
 import { Pool } from 'pg';
 import { config } from 'dotenv';
 import * as path from 'path';
-import * as fs from 'fs';
 
 config();
+
+const BASE_IMAGE_URL = 'https://examroomedu.com/1/api/images';
+const SUPABASE_PATTERN = /https?:\/\/[^\s"')]+supabase[^\s"')]+/gi;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 });
 
+function extractSupabaseUrlsFromString(input: string): string[] {
+  const matches = input.match(SUPABASE_PATTERN) || [];
+  return [...new Set(matches)];
+}
+
+function collectUrlsFromJson(node: unknown, found: Set<string>): void {
+  if (typeof node === 'string') {
+    const urls = extractSupabaseUrlsFromString(node);
+    urls.forEach((url) => found.add(url));
+    return;
+  }
+
+  if (Array.isArray(node)) {
+    node.forEach((child) => collectUrlsFromJson(child, found));
+    return;
+  }
+
+  if (node && typeof node === 'object') {
+    Object.values(node).forEach((child) => collectUrlsFromJson(child, found));
+  }
+}
+
+function replaceUrlsInJson(node: unknown, urlMap: Map<string, string>): unknown {
+  if (typeof node === 'string') {
+    let replaced = node;
+    for (const [oldUrl, newUrl] of urlMap.entries()) {
+      replaced = replaced.split(oldUrl).join(newUrl);
+    }
+    return replaced;
+  }
+
+  if (Array.isArray(node)) {
+    return node.map((child) => replaceUrlsInJson(child, urlMap));
+  }
+
+  if (node && typeof node === 'object') {
+    const obj = node as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      out[key] = replaceUrlsInJson(value, urlMap);
+    }
+    return out;
+  }
+
+  return node;
+}
+
+async function uploadUrlToNeon(url: string, label: string): Promise<string> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download ${label}: HTTP ${response.status}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const contentType = response.headers.get('content-type') || 'image/jpeg';
+  const urlPath = new URL(url).pathname;
+  const originalFilename = path.basename(urlPath);
+  const extension = path.extname(originalFilename) || '.jpg';
+  const filename = `migrated_${Date.now()}_${Math.random().toString(36).slice(2)}${extension}`;
+
+  const insertResult = await pool.query(
+    `INSERT INTO images (filename, content_type, file_size, data)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id`,
+    [filename, contentType, buffer.length, buffer],
+  );
+
+  const newId = insertResult.rows[0].id;
+  return `${BASE_IMAGE_URL}/${newId}`;
+}
+
 async function migrateImages() {
-  console.log('🔄 Starting migration of images from Supabase to Neon...\n');
+  console.log('Starting Supabase -> Neon image migration...\n');
+
+  const globalUrlMap = new Map<string, string>();
+  let migratedUrls = 0;
+  let questionUpdates = 0;
+  const errors: Array<{ questionId: string; error: string }> = [];
 
   try {
-    // Step 1: Find all questions with Supabase image URLs
-    console.log('📊 Step 1: Finding questions with Supabase images...');
+    console.log('Step 1: Loading candidate questions...');
     const questionsResult = await pool.query(
-      `SELECT id, question_image_url, question_text 
-       FROM questions 
-       WHERE question_image_url IS NOT NULL 
-       AND question_image_url != ''
-       AND (
-         question_image_url LIKE '%supabase.co%' 
-         OR question_image_url LIKE '%supabase.in%'
+      `SELECT id, question_image_url, content
+       FROM questions
+       WHERE (
+         question_image_url ILIKE '%supabase%'
+         OR content::text ILIKE '%supabase%'
        )
-       ORDER BY created_at DESC`
+       ORDER BY created_at DESC`,
     );
 
-    const questions = questionsResult.rows;
-    console.log(`   Found ${questions.length} questions with Supabase images\n`);
+    const questions = questionsResult.rows as Array<{
+      id: string;
+      question_image_url: string | null;
+      content: unknown;
+    }>;
+
+    console.log(`Found ${questions.length} questions with Supabase references.\n`);
 
     if (questions.length === 0) {
-      console.log('✅ No Supabase images to migrate!');
+      console.log('No Supabase image URLs found.');
       return;
     }
 
-    // Step 2: Migrate each image
-    let successCount = 0;
-    let failCount = 0;
-    const errors: Array<{ questionId: string; error: string }> = [];
-
     for (let i = 0; i < questions.length; i++) {
-      const question = questions[i];
+      const q = questions[i];
+      const questionUrlMap = new Map<string, string>();
       const progress = `[${i + 1}/${questions.length}]`;
 
       try {
-        console.log(`${progress} Migrating image for question ${question.id}...`);
-        console.log(`   Old URL: ${question.question_image_url}`);
+        const foundUrls = new Set<string>();
 
-        // Download image from Supabase
-        const response = await fetch(question.question_image_url);
-        if (!response.ok) {
-          throw new Error(`Failed to download: HTTP ${response.status}`);
+        if (q.question_image_url && q.question_image_url.toLowerCase().includes('supabase')) {
+          foundUrls.add(q.question_image_url);
         }
 
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        const contentType = response.headers.get('content-type') || 'image/jpeg';
+        collectUrlsFromJson(q.content, foundUrls);
 
-        // Extract filename from URL or generate new one
-        const urlPath = new URL(question.question_image_url).pathname;
-        const originalFilename = path.basename(urlPath);
-        const extension = path.extname(originalFilename) || '.jpg';
-        const filename = `migrated_${question.id}_${Date.now()}${extension}`;
+        if (foundUrls.size === 0) {
+          continue;
+        }
 
-        console.log(`   Size: ${(buffer.length / 1024).toFixed(2)} KB`);
-        console.log(`   Type: ${contentType}`);
+        console.log(`${progress} Question ${q.id}: ${foundUrls.size} URL(s) to migrate`);
 
-        // Insert into images table
-        const insertResult = await pool.query(
-          `INSERT INTO images (filename, content_type, file_size, data) 
-           VALUES ($1, $2, $3, $4) 
-           RETURNING id`,
-          [filename, contentType, buffer.length, buffer]
-        );
+        for (const oldUrl of foundUrls) {
+          const cached = globalUrlMap.get(oldUrl);
+          if (cached) {
+            questionUrlMap.set(oldUrl, cached);
+            continue;
+          }
 
-        const newImageId = insertResult.rows[0].id;
-        const newImageUrl = `https://examroomedu.com/1/api/images/${newImageId}`;
+          const newUrl = await uploadUrlToNeon(oldUrl, `question ${q.id}`);
+          globalUrlMap.set(oldUrl, newUrl);
+          questionUrlMap.set(oldUrl, newUrl);
+          migratedUrls++;
+          console.log(`  Migrated URL -> ${newUrl}`);
+        }
 
-        // Update question with new URL
+        const nextQuestionImageUrl = q.question_image_url
+          ? (questionUrlMap.get(q.question_image_url) || q.question_image_url)
+          : null;
+        const nextContent = replaceUrlsInJson(q.content, questionUrlMap);
+
         await pool.query(
-          `UPDATE questions 
+          `UPDATE questions
            SET question_image_url = $1,
+               content = $2::jsonb,
                updated_at = NOW()
-           WHERE id = $2`,
-          [newImageUrl, question.id]
+           WHERE id = $3`,
+          [nextQuestionImageUrl, JSON.stringify(nextContent), q.id],
         );
 
-        console.log(`   ✅ New URL: ${newImageUrl}\n`);
-        successCount++;
-
+        questionUpdates++;
       } catch (error: any) {
-        console.error(`   ❌ Failed: ${error.message}\n`);
-        failCount++;
-        errors.push({
-          questionId: question.id,
-          error: error.message,
-        });
-      }
-
-      // Add a small delay to avoid overwhelming the servers
-      if (i < questions.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        errors.push({ questionId: q.id, error: error.message || 'Unknown error' });
+        console.error(`${progress} Failed question ${q.id}: ${error.message || error}`);
       }
     }
 
-    // Summary
+    const remaining = await pool.query(
+      `SELECT COUNT(*) AS count
+       FROM questions
+       WHERE question_image_url ILIKE '%supabase%'
+          OR content::text ILIKE '%supabase%'`,
+    );
+
     console.log('\n========================================');
     console.log('Migration Summary');
     console.log('========================================');
-    console.log(`✅ Successfully migrated: ${successCount}`);
-    console.log(`❌ Failed: ${failCount}`);
-    console.log(`📊 Total processed: ${questions.length}\n`);
+    console.log(`Questions updated: ${questionUpdates}`);
+    console.log(`Unique URLs migrated: ${migratedUrls}`);
+    console.log(`Errors: ${errors.length}`);
+    console.log(`Remaining questions with Supabase refs: ${remaining.rows[0].count}`);
 
     if (errors.length > 0) {
-      console.log('Failed migrations:');
-      errors.forEach(err => {
-        console.log(`   - Question ${err.questionId}: ${err.error}`);
-      });
-      console.log('');
+      console.log('\nFailed question IDs:');
+      errors.forEach((e) => console.log(`- ${e.questionId}: ${e.error}`));
     }
-
-    // Verify migration
-    console.log('🔍 Verification: Checking remaining Supabase URLs...');
-    const remainingResult = await pool.query(
-      `SELECT COUNT(*) as count 
-       FROM questions 
-       WHERE question_image_url IS NOT NULL 
-       AND (question_image_url LIKE '%supabase.co%' OR question_image_url LIKE '%supabase.in%')`
-    );
-    
-    const remaining = parseInt(remainingResult.rows[0].count);
-    console.log(`   Remaining Supabase URLs: ${remaining}\n`);
-
-    if (remaining === 0 && failCount === 0) {
-      console.log('🎉 All images successfully migrated to Neon!');
-    } else if (remaining > 0) {
-      console.log('⚠️  Some images still point to Supabase. You may want to re-run this script.');
-    }
-
   } catch (error: any) {
-    console.error('\n❌ Migration failed:', error.message);
-    console.error(error);
+    console.error('Migration failed:', error.message || error);
     process.exit(1);
   } finally {
     await pool.end();
   }
 }
 
-// Run migration
 migrateImages().catch(console.error);
