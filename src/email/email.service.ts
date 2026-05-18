@@ -6,14 +6,14 @@ export class EmailService {
   private transporter: nodemailer.Transporter;
 
   constructor() {
-    // Initialize nodemailer transporter
+    // Initialize nodemailer transporter for Microsoft/Outlook
     this.transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+      host: process.env.EMAIL_HOST || 'smtp-mail.outlook.com',
       port: parseInt(process.env.EMAIL_PORT || '587'),
       secure: process.env.EMAIL_SECURE === 'true', // true for 465, false for other ports
       auth: {
         user: process.env.EMAIL_USER, // info@examroomedu.com
-        pass: process.env.EMAIL_PASSWORD, // App password or SMTP password
+        pass: process.env.EMAIL_PASSWORD, // App password from Microsoft account
       },
     });
   }
