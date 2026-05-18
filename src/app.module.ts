@@ -12,6 +12,7 @@ import { ClassroomsModule } from './classrooms/classrooms.module';
 import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 import { UsageModule } from './usage/usage.module';
 import { ImagesModule } from './images/images.module';
+import { EmailModule } from './email/email.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ImagesModule } from './images/images.module';
     ActivityLogsModule,
     UsageModule,
     ImagesModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,10 +1,14 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { Pool } from 'pg';
 import * as bcrypt from 'bcrypt';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class UsersService {
-  constructor(@Inject('DATABASE_POOL') private pool: Pool) {}
+  constructor(
+    @Inject('DATABASE_POOL') private pool: Pool,
+    private emailService: EmailService,
+  ) {}
 
   async findAll(filters?: { role?: string }) {
     let query = 'SELECT id, email, username, first_name, last_name, role, created_at, email_verified FROM users';
@@ -43,6 +47,7 @@ export class UsersService {
     lastName: string;
     password: string;
     role?: string;
+    sendEmail?: boolean;
   }) {
     const hashedPassword = await bcrypt.hash(userData.password, 10);
     const role = userData.role || 'student';
@@ -69,6 +74,23 @@ export class UsersService {
       );
 
       await client.query('COMMIT');
+
+      // Send welcome email if requested and email is not a placeholder
+      if (userData.sendEmail && !userData.email.includes('@sat-platform.local')) {
+        try {
+          await this.emailService.sendWelcomeEmail(userData.email, {
+            firstName: userData.firstName,
+            lastName: userData.lastName,
+            username: userData.username,
+            password: userData.password,
+          });
+          console.log(`Welcome email sent to ${userData.email}`);
+        } catch (emailError) {
+          console.error('Failed to send welcome email:', emailError);
+          // Don't fail the user creation if email fails
+        }
+      }
+
       return { user, password: userData.password };
     } catch (error) {
       await client.query('ROLLBACK');
