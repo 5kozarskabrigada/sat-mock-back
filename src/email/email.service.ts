@@ -43,9 +43,9 @@ export class EmailService {
     const { firstName, lastName, username, password } = studentData;
 
     const mailOptions = {
-      from: `"ExamRoom EDU" <${process.env.EMAIL_USER}>`,
+      from: `"ExamRoom Team" <${process.env.EMAIL_USER}>`,
       to,
-      subject: 'Welcome to ExamRoom EDU - Your Login Credentials',
+      subject: 'Welcome to ExamRoom - Your Login Credentials',
       html: `
         <!DOCTYPE html>
         <html>
@@ -54,21 +54,22 @@ export class EmailService {
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #4F46E5; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .header { background-color: #123b71; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .logo { max-width: 150px; margin-bottom: 10px; }
             .content { background-color: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }
-            .credentials { background-color: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4F46E5; }
-            .credential-row { margin: 10px 0; }
-            .label { font-weight: bold; color: #4F46E5; }
-            .value { font-family: 'Courier New', monospace; background-color: #f3f4f6; padding: 5px 10px; border-radius: 4px; display: inline-block; }
+            .credentials { background-color: white; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            .credential-row { margin: 15px 0; padding: 10px; background-color: #f8fafc; border-radius: 6px; }
+            .label { font-weight: bold; color: #123b71; display: block; margin-bottom: 5px; font-size: 12px; text-transform: uppercase; }
+            .value { font-family: 'Courier New', monospace; background-color: #e0f2fe; padding: 8px 12px; border-radius: 4px; display: block; font-size: 16px; color: #0c4a6e; }
             .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }
-            .button { display: inline-block; background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
-            .warning { background-color: #fef3c7; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b; margin: 20px 0; }
+            .button { display: inline-block; background-color: #123b71; color: white !important; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: 600; }
           </style>
         </head>
         <body>
           <div class="container">
             <div class="header">
-              <h1>Welcome to ExamRoom EDU</h1>
+              <img src="https://i.postimg.cc/4Y5V5pBq/logo.png" alt="ExamRoom Logo" class="logo" />
+              <h1>Welcome to ExamRoom</h1>
             </div>
             <div class="content">
               <p>Dear ${firstName} ${lastName},</p>
@@ -77,45 +78,41 @@ export class EmailService {
               
               <div class="credentials">
                 <div class="credential-row">
-                  <span class="label">Username:</span> <span class="value">${username}</span>
+                  <span class="label">Username</span>
+                  <span class="value">${username}</span>
                 </div>
                 <div class="credential-row">
-                  <span class="label">Password:</span> <span class="value">${password}</span>
+                  <span class="label">Password</span>
+                  <span class="value">${password}</span>
                 </div>
-              </div>
-              
-              <div class="warning">
-                <strong>⚠️ Important Security Notice:</strong><br>
-                Please change your password after your first login for security purposes.
               </div>
               
               <div style="text-align: center;">
-                <a href="https://examroomedu.com" class="button">Login to Your Account</a>
+                <a href="https://examroomedu.com/1/login" class="button" style="color: white;">Login to Your Account</a>
               </div>
               
               <p><strong>Getting Started:</strong></p>
               <ol>
-                <li>Visit the ExamRoom EDU platform</li>
+                <li>Visit the ExamRoom platform</li>
                 <li>Click on "Student Login"</li>
                 <li>Enter your username and password</li>
-                <li>Change your password in your profile settings</li>
               </ol>
               
               <p>If you have any questions or need assistance, please contact your administrator.</p>
               
               <p>Best regards,<br>
-              <strong>The ExamRoom EDU Team</strong></p>
+              <strong>The ExamRoom Team</strong></p>
             </div>
             <div class="footer">
               <p>This is an automated email. Please do not reply to this message.</p>
-              <p>&copy; 2026 ExamRoom EDU. All rights reserved.</p>
+              <p>&copy; 2026 ExamRoom. All rights reserved.</p>
             </div>
           </div>
         </body>
         </html>
       `,
       text: `
-Welcome to ExamRoom EDU
+Welcome to ExamRoom
 
 Dear ${firstName} ${lastName},
 
@@ -124,22 +121,19 @@ Your student account has been created successfully. Below are your login credent
 Username: ${username}
 Password: ${password}
 
-⚠️ Important: Please change your password after your first login for security purposes.
-
 Getting Started:
-1. Visit the ExamRoom EDU platform
+1. Visit the ExamRoom platform at https://examroomedu.com/1/login
 2. Click on "Student Login"
 3. Enter your username and password
-4. Change your password in your profile settings
 
 If you have any questions or need assistance, please contact your administrator.
 
 Best regards,
-The ExamRoom EDU Team
+The ExamRoom Team
 
 ---
 This is an automated email. Please do not reply to this message.
-© 2026 ExamRoom EDU. All rights reserved.
+© 2026 ExamRoom. All rights reserved.
       `,
     };
 
