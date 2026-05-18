@@ -44,6 +44,11 @@ jobs:
               -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
               -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
               -e CORS_ORIGIN="${{ secrets.CORS_ORIGIN }}" \
+              -e EMAIL_HOST="${{ secrets.EMAIL_HOST }}" \
+              -e EMAIL_PORT="${{ secrets.EMAIL_PORT }}" \
+              -e EMAIL_SECURE="${{ secrets.EMAIL_SECURE }}" \
+              -e EMAIL_USER="${{ secrets.EMAIL_USER }}" \
+              -e EMAIL_PASSWORD="${{ secrets.EMAIL_PASSWORD }}" \
               -e PORT=3001 \
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             
