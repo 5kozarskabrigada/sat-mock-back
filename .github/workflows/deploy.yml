@@ -28,17 +28,19 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
           script: |
-            # Pull latest image
+            # Remove old images and pull fresh
+            docker rmi ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest || true
             docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             
             # Stop and remove existing container
             docker stop sat-api || true
             docker rm sat-api || true
             
-            # Run new container
+            # Run new container with --pull always
             docker run -d \
               --name sat-api \
               --restart unless-stopped \
+              --pull always \
               -p 3001:3001 \
               -e NODE_ENV=production \
               -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
