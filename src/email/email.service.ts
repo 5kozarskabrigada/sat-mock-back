@@ -6,6 +6,14 @@ export class EmailService {
   private transporter: nodemailer.Transporter;
 
   constructor() {
+    // Log email configuration (without password)
+    console.log('Email Service Configuration:');
+    console.log('- Host:', process.env.EMAIL_HOST || 'smtp.office365.com');
+    console.log('- Port:', process.env.EMAIL_PORT || '587');
+    console.log('- Secure:', process.env.EMAIL_SECURE === 'true');
+    console.log('- User:', process.env.EMAIL_USER || 'NOT SET');
+    console.log('- Password:', process.env.EMAIL_PASSWORD ? '***SET***' : 'NOT SET');
+    
     // Initialize nodemailer transporter for Microsoft 365/Outlook with custom domain
     this.transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST || 'smtp.office365.com',
@@ -31,6 +39,7 @@ export class EmailService {
       password: string;
     },
   ) {
+    console.log(`[EmailService] Attempting to send email to: ${to}`);
     const { firstName, lastName, username, password } = studentData;
 
     const mailOptions = {
