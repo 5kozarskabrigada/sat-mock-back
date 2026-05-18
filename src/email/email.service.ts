@@ -54,8 +54,9 @@ export class EmailService {
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #123b71; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
-            .logo { max-width: 150px; margin-bottom: 10px; }
+            .header { background-color: #123b71; color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .logo-wrapper { background-color: white; display: inline-block; padding: 15px 30px; border-radius: 12px; margin-bottom: 20px; }
+            .logo { max-width: 200px; height: auto; display: block; }
             .content { background-color: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }
             .credentials { background-color: white; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
             .credential-row { margin: 15px 0; padding: 10px; background-color: #f8fafc; border-radius: 6px; }
@@ -68,8 +69,10 @@ export class EmailService {
         <body>
           <div class="container">
             <div class="header">
-              <img src="https://i.postimg.cc/4Y5V5pBq/logo.png" alt="ExamRoom Logo" class="logo" />
-              <h1>Welcome to ExamRoom</h1>
+              <div class="logo-wrapper">
+                <img src="https://i.postimg.cc/4Y5V5pBq/logo.png" alt="ExamRoom Logo" class="logo" />
+              </div>
+              <h1 style="margin: 0; font-size: 28px;">Welcome to ExamRoom</h1>
             </div>
             <div class="content">
               <p>Dear ${firstName} ${lastName},</p>
