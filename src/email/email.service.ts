@@ -6,15 +6,19 @@ export class EmailService {
   private transporter: nodemailer.Transporter;
 
   constructor() {
-    // Initialize nodemailer transporter for Microsoft/Outlook
+    // Initialize nodemailer transporter for Microsoft 365/Outlook with custom domain
     this.transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST || 'smtp-mail.outlook.com',
+      host: process.env.EMAIL_HOST || 'smtp.office365.com',
       port: parseInt(process.env.EMAIL_PORT || '587'),
       secure: process.env.EMAIL_SECURE === 'true', // true for 465, false for other ports
       auth: {
         user: process.env.EMAIL_USER, // info@examroomedu.com
-        pass: process.env.EMAIL_PASSWORD, // App password from Microsoft account
+        pass: process.env.EMAIL_PASSWORD, // Account password
       },
+      tls: {
+        ciphers: 'SSLv3',
+        rejectUnauthorized: false
+      }
     });
   }
 
