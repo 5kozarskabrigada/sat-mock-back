@@ -94,6 +94,18 @@ export class UsersService {
       return { user, password: userData.password };
     } catch (error) {
       await client.query('ROLLBACK');
+      
+      // Handle specific database errors
+      if (error.code === '23505') { // Unique constraint violation
+        if (error.constraint === 'users_email_key' || error.detail?.includes('email')) {
+          throw new Error('This email address is already registered. Please use a different email.');
+        }
+        if (error.constraint === 'users_username_key' || error.detail?.includes('username')) {
+          throw new Error('This username is already taken. Please try again.');
+        }
+        throw new Error('A user with this information already exists.');
+      }
+      
       throw error;
     } finally {
       client.release();
