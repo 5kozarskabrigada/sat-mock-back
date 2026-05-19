@@ -59,7 +59,7 @@ export class UsersService {
       // Create user
       const userResult = await client.query(
         `INSERT INTO users (email, username, first_name, last_name, role, email_verified, created_at, updated_at) 
-         VALUES ($1, $2, $3, $4, $5, false, NOW(), NOW()) 
+         VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), NOW()) 
          RETURNING id, email, username, first_name, last_name, role, created_at`,
         [userData.email, userData.username, userData.firstName, userData.lastName, role],
       );
