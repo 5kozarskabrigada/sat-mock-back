@@ -13,6 +13,7 @@ import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 import { UsageModule } from './usage/usage.module';
 import { ImagesModule } from './images/images.module';
 import { EmailModule } from './email/email.module';
+import { PdfModule } from './pdf/pdf.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { EmailModule } from './email/email.module';
     UsageModule,
     ImagesModule,
     EmailModule,
+    PdfModule,
   ],
   controllers: [AppController],
   providers: [AppService],

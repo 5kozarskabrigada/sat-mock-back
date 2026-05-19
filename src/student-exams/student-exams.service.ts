@@ -1,9 +1,15 @@
 import { Injectable, Inject, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { Pool } from 'pg';
+import { PdfService } from '../pdf/pdf.service';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class StudentExamsService {
-  constructor(@Inject('DATABASE_POOL') private pool: Pool) {}
+  constructor(
+    @Inject('DATABASE_POOL') private pool: Pool,
+    private pdfService: PdfService,
+    private emailService: EmailService,
+  ) {}
   private readonly logger = new Logger(StudentExamsService.name);
 
   private isRetryableDbError(error: any) {
@@ -384,5 +390,184 @@ export class StudentExamsService {
     );
 
     return result.rows;
+  }
+
+  async generateAndSendReport(studentExamId: string, customEmail?: string) {
+    try {
+      // Fetch student exam data
+      const examResult = await this.pool.query(
+        `SELECT se.*, u.first_name, u.last_name, u.username, u.email as student_email, e.title as exam_title
+         FROM student_exams se
+         JOIN users u ON u.id = se.student_id
+         JOIN exams e ON e.id = se.exam_id
+         WHERE se.id = $1 AND se.status = 'completed'`,
+        [studentExamId],
+      );
+
+      if (examResult.rows.length === 0) {
+        throw new NotFoundException('Completed exam not found');
+      }
+
+      const examData = examResult.rows[0];
+      const studentEmail = customEmail || examData.student_email;
+
+      if (!studentEmail || studentEmail.includes('@sat-platform.local')) {
+        throw new BadRequestException('Valid student email required to send report');
+      }
+
+      // Fetch answers
+      const answersResult = await this.pool.query(
+        `SELECT question_id, answer_value, is_correct
+         FROM student_answers
+         WHERE student_exam_id = $1`,
+        [studentExamId],
+      );
+
+      // Fetch questions
+      const questionsResult = await this.pool.query(
+        `SELECT id, domain, correct_answer, section, module, content
+         FROM exam_questions
+         WHERE exam_id = $1 AND deleted_at IS NULL
+         ORDER BY section, module, id`,
+        [examData.exam_id],
+      );
+
+      const answers = answersResult.rows;
+      const questions = questionsResult.rows;
+
+      // Calculate scores
+      const rwQuestions = questions.filter((q) => q.section === 'reading_writing');
+      const mathQuestions = questions.filter((q) => q.section === 'math');
+
+      const rwM1Questions = questions.filter((q) => q.section === 'reading_writing' && q.module === 1);
+      const rwM2Questions = questions.filter((q) => q.section === 'reading_writing' && q.module === 2);
+      const mathM1Questions = questions.filter((q) => q.section === 'math' && q.module === 1);
+      const mathM2Questions = questions.filter((q) => q.section === 'math' && q.module === 2);
+
+      const rwM1Correct = answers.filter((a) => a.is_correct && rwM1Questions.some((q) => q.id === a.question_id)).length;
+      const rwM2Correct = answers.filter((a) => a.is_correct && rwM2Questions.some((q) => q.id === a.question_id)).length;
+      const mathM1Correct = answers.filter((a) => a.is_correct && mathM1Questions.some((q) => q.id === a.question_id)).length;
+      const mathM2Correct = answers.filter((a) => a.is_correct && mathM2Questions.some((q) => q.id === a.question_id)).length;
+
+      // Simplified SAT scoring (you may want to use the actual conversion tables)
+      const rwScore = this.calculateRWScore(rwM1Correct, rwM2Correct);
+      const mathScore = this.calculateMathScore(mathM1Correct, mathM2Correct);
+      const totalScore = rwScore + mathScore;
+
+      // Module summaries
+      const moduleSummaries = [
+        { label: 'Reading & Writing Module 1', correct: rwM1Correct, total: rwM1Questions.length },
+        { label: 'Reading & Writing Module 2', correct: rwM2Correct, total: rwM2Questions.length },
+        { label: 'Math Module 1', correct: mathM1Correct, total: mathM1Questions.length },
+        { label: 'Math Module 2', correct: mathM2Correct, total: mathM2Questions.length },
+      ].filter((m) => m.total > 0);
+
+      // Domain scores
+      const domains = [...new Set(questions.map((q) => q.domain))];
+      const domainScores = domains.map((domain) => {
+        const domainQuestions = questions.filter((q) => q.domain === domain);
+        const correct = answers.filter(
+          (a) => a.is_correct && domainQuestions.some((q) => q.id === a.question_id),
+        ).length;
+        return {
+          domain,
+          correct,
+          total: domainQuestions.length,
+          percentage: (correct / domainQuestions.length) * 100,
+        };
+      });
+
+      // Section breakdowns
+      const moduleGroups = [
+        { label: 'Reading & Writing Module 1', section: 'reading_writing', module: 1 },
+        { label: 'Reading & Writing Module 2', section: 'reading_writing', module: 2 },
+        { label: 'Math Module 1', section: 'math', module: 1 },
+        { label: 'Math Module 2', section: 'math', module: 2 },
+      ];
+
+      const sectionBreakdowns = moduleGroups
+        .map((group) => {
+          const moduleQuestions = questions.filter((q) => q.section === group.section && q.module === group.module);
+
+          if (moduleQuestions.length === 0) return null;
+
+          const questionDetails = moduleQuestions.map((question, index) => {
+            const answer = answers.find((a) => a.question_id === question.id);
+            const result = answer?.is_correct ? 'Correct' : answer ? 'Incorrect' : 'Skipped';
+
+            return {
+              number: index + 1,
+              domain: question.domain,
+              correctAnswer: question.correct_answer,
+              studentAnswer: answer?.answer_value || '(Skipped)',
+              result,
+            };
+          });
+
+          return {
+            label: group.label,
+            correct: questionDetails.filter((q) => q.result === 'Correct').length,
+            total: questionDetails.length,
+            questions: questionDetails,
+          };
+        })
+        .filter((section) => section !== null);
+
+      // Generate PDF
+      const reportData = {
+        student: {
+          firstName: examData.first_name,
+          lastName: examData.last_name,
+          username: examData.username,
+          email: studentEmail,
+        },
+        exam: {
+          title: examData.exam_title,
+          completedAt: examData.completed_at,
+        },
+        totalScore,
+        rwScore,
+        mathScore,
+        moduleSummaries,
+        domainScores,
+        sectionBreakdowns,
+        lockdownViolations: examData.lockdown_violations || 0,
+      };
+
+      const pdfBuffer = await this.pdfService.generateExamReportPDF(reportData);
+
+      // Send email
+      await this.emailService.sendExamReportEmail(
+        studentEmail,
+        {
+          firstName: examData.first_name,
+          lastName: examData.last_name,
+          examTitle: examData.exam_title,
+          totalScore,
+        },
+        pdfBuffer,
+      );
+
+      return {
+        success: true,
+        message: `Report sent successfully to ${studentEmail}`,
+        score: totalScore,
+      };
+    } catch (error) {
+      this.logger.error('Failed to generate and send report:', error);
+      throw error;
+    }
+  }
+
+  private calculateRWScore(m1Correct: number, m2Correct: number): number {
+    // Simplified conversion - in production, use actual SAT conversion tables
+    const totalCorrect = m1Correct + m2Correct;
+    return Math.min(800, 200 + totalCorrect * 10);
+  }
+
+  private calculateMathScore(m1Correct: number, m2Correct: number): number {
+    // Simplified conversion - in production, use actual SAT conversion tables
+    const totalCorrect = m1Correct + m2Correct;
+    return Math.min(800, 200 + totalCorrect * 10);
   }
 }

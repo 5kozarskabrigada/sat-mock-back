@@ -98,4 +98,10 @@ export class StudentExamsController {
   async getExamParticipation(@Param('examId') examId: string) {
     return this.studentExamsService.getExamParticipation(examId);
   }
+
+  @Post(':id/send-report')
+  @Roles('admin')
+  async sendReportEmail(@Param('id') id: string, @Body() data: { email?: string }) {
+    return this.studentExamsService.generateAndSendReport(id, data.email);
+  }
 }
