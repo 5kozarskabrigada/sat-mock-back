@@ -35,5 +35,10 @@ lerna-debug.log*
 .env
 .env.test
 
+# Admin credentials and sensitive scripts
+create-jamal-admin.sql
+CREATE_JAMAL_ADMIN.md
+scripts/create-jamal-admin.ts
+
 # NestJS
 /test/jest-e2e.json
