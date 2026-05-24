@@ -267,7 +267,10 @@ export class StudentExamsService {
         const correctnessPayload: Array<{ id: string; is_correct: boolean }> = [];
 
         for (const answer of answers) {
-          const isCorrect = answer.answer_value === answer.correct_answer;
+          const isCorrect = answer.correct_answer
+          .split('|')
+          .map((a: string) => a.trim().toLowerCase())
+          .includes(answer.answer_value?.trim().toLowerCase());
           const section = answer.section === 'reading_writing' ? 'readingWriting' : 'math';
 
           scoreBreakdown[section].total++;
