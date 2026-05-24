@@ -496,7 +496,7 @@ export class StudentExamsService {
 
           const questionDetails = moduleQuestions.map((question, index) => {
             const answer = answers.find((a) => a.question_id === question.id);
-            const result = answer?.is_correct ? 'Correct' : answer ? 'Incorrect' : 'Skipped';
+            const result: 'Correct' | 'Incorrect' | 'Skipped' = answer?.is_correct ? 'Correct' : answer ? 'Incorrect' : 'Skipped';
 
             return {
               number: index + 1,
