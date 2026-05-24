@@ -359,7 +359,7 @@ export class PdfService {
           .font('Helvetica')
           .text(
             `This exam recorded ${reportData.lockdownViolations} lockdown violation(s). Violations occur when the student attempts to leave the exam window or access other applications during the test.`,
-            50,
+            50, doc.y,
             { width: 495 },
           );
       }
