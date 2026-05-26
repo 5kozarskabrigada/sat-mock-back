@@ -285,10 +285,8 @@ export class StudentExamsService {
         const correctnessPayload: Array<{ id: string; is_correct: boolean }> = [];
 
         for (const answer of answers) {
-          const isCorrect = answer.correct_answer
-          .split('|')
-          .map((a: string) => a.trim().toLowerCase())
-          .includes(answer.answer_value?.trim().toLowerCase());
+          const isCorrect =
+            this.normalizeAnswer(answer.answer_value) === this.normalizeAnswer(answer.correct_answer);
           const section = answer.section === 'reading_writing' ? 'readingWriting' : 'math';
 
           scoreBreakdown[section].total++;
@@ -296,8 +294,7 @@ export class StudentExamsService {
             scoreBreakdown[section].correct++;
           }
 
-                    const isCorrect =
-                      this.normalizeAnswer(answer.answer_value) === this.normalizeAnswer(answer.correct_answer);
+          if (answer.domain) {
             if (!scoreBreakdown[section].byDomain[answer.domain]) {
               scoreBreakdown[section].byDomain[answer.domain] = { correct: 0, total: 0 };
             }
