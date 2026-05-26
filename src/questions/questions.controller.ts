@@ -42,13 +42,8 @@ export class QuestionsController {
 
   @Post('bulk')
   @Roles('admin')
-  async createBulk(
-    @Body() data: { examId?: string; exam_id?: string; questions: any[] },
-  ) {
-    return this.questionsService.createBulk(
-      data.exam_id ?? data.examId ?? '',
-      data.questions,
-    );
+  async createBulk(@Body() data: { examId?: string; exam_id?: string; questions: any[] }) {
+    return this.questionsService.createBulk(data.exam_id ?? data.examId ?? '', data.questions);
   }
 
   @Put(':id')
@@ -61,8 +56,7 @@ export class QuestionsController {
   @Roles('admin')
   async reorderByExam(
     @Param('examId') examId: string,
-    @Body()
-    data: { section: string; module: number; questionIdsInOrder: string[] },
+    @Body() data: { section: string; module: number; questionIdsInOrder: string[] },
   ) {
     return this.questionsService.reorderByExam(examId, data);
   }

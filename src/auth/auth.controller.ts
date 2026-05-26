@@ -7,17 +7,8 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(
-    @Body()
-    loginDto: {
-      identifier?: string;
-      email?: string;
-      username?: string;
-      password: string;
-    },
-  ) {
-    const identifier =
-      loginDto.identifier || loginDto.username || loginDto.email;
+  async login(@Body() loginDto: { identifier?: string; email?: string; username?: string; password: string }) {
+    const identifier = loginDto.identifier || loginDto.username || loginDto.email;
     const user = await this.authService.validateUser(
       identifier || '',
       loginDto.password,

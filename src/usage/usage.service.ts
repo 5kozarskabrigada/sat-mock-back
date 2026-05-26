@@ -10,11 +10,7 @@ export class UsageService {
    */
   async getPerStudentUsage(from?: string, to?: string) {
     const now = new Date();
-    const startOfMonth = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      1,
-    ).toISOString();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const fromDate = from || startOfMonth;
     const rawTo = to || now.toISOString();
     const toDate = rawTo.length === 10 ? `${rawTo}T23:59:59.999Z` : rawTo;
@@ -37,32 +33,19 @@ export class UsageService {
       [fromDate, toDate],
     );
 
-    const totalMs = rows.reduce(
-      (sum, r) => sum + Number(r.total_response_ms || 0),
-      0,
-    );
+    const totalMs = rows.reduce((sum, r) => sum + Number(r.total_response_ms || 0), 0);
     const totalRequests = rows.reduce((sum, r) => sum + r.total_requests, 0);
 
     const users = rows.map((r) => ({
       ...r,
-      pct_of_total_time:
-        totalMs > 0
-          ? Math.round((Number(r.total_response_ms) / totalMs) * 10000) / 100
-          : 0,
-      pct_of_total_requests:
-        totalRequests > 0
-          ? Math.round((r.total_requests / totalRequests) * 10000) / 100
-          : 0,
+      pct_of_total_time: totalMs > 0 ? Math.round((Number(r.total_response_ms) / totalMs) * 10000) / 100 : 0,
+      pct_of_total_requests: totalRequests > 0 ? Math.round((r.total_requests / totalRequests) * 10000) / 100 : 0,
     }));
 
     const studentCount = users.filter((u) => u.user_role === 'student').length;
     const adminCount = users.filter((u) => u.user_role === 'admin').length;
-    const studentMs = users
-      .filter((u) => u.user_role === 'student')
-      .reduce((sum, r) => sum + Number(r.total_response_ms || 0), 0);
-    const adminMs = users
-      .filter((u) => u.user_role === 'admin')
-      .reduce((sum, r) => sum + Number(r.total_response_ms || 0), 0);
+    const studentMs = users.filter((u) => u.user_role === 'student').reduce((sum, r) => sum + Number(r.total_response_ms || 0), 0);
+    const adminMs = users.filter((u) => u.user_role === 'admin').reduce((sum, r) => sum + Number(r.total_response_ms || 0), 0);
 
     return {
       period: { from: fromDate, to: toDate },
@@ -85,11 +68,7 @@ export class UsageService {
    */
   async getUsageSummary(from?: string, to?: string) {
     const now = new Date();
-    const startOfMonth = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      1,
-    ).toISOString();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const fromDate = from || startOfMonth;
     const rawTo = to || now.toISOString();
     const toDate = rawTo.length === 10 ? `${rawTo}T23:59:59.999Z` : rawTo;

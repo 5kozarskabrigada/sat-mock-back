@@ -65,8 +65,7 @@ export class StudentExamsController {
   @Roles('student')
   async saveAnswersBatch(
     @Param('id') id: string,
-    @Body()
-    data: { answers: Array<{ questionId: string; answerValue: string }> },
+    @Body() data: { answers: Array<{ questionId: string; answerValue: string }> },
     @Request() req: any,
   ) {
     return this.studentExamsService.saveAnswersBatch(
@@ -102,10 +101,7 @@ export class StudentExamsController {
 
   @Post(':id/send-report')
   @Roles('admin')
-  async sendReportEmail(
-    @Param('id') id: string,
-    @Body() data: { email?: string },
-  ) {
+  async sendReportEmail(@Param('id') id: string, @Body() data: { email?: string }) {
     return this.studentExamsService.generateAndSendReport(id, data.email);
   }
 }

@@ -10,6 +10,15 @@ import { Pool } from 'pg';
 export class QuestionsService {
   constructor(@Inject('DATABASE_POOL') private pool: Pool) {}
 
+  private normalizeAnswerForComparison(answer: string | null | undefined) {
+    return (answer ?? '')
+      .split('|')
+      .map((value) => value.trim().toLowerCase())
+      .filter((value) => value.length > 0)
+      .sort()
+      .join('|');
+  }
+
   private async getNextOrderIndex(
     examId: string,
     section: string,
@@ -192,6 +201,20 @@ export class QuestionsService {
       throw new BadRequestException('No valid fields provided for update');
     }
 
+    let existingQuestion: { correct_answer: string } | null = null;
+    if (correctAnswer !== undefined) {
+      const existingResult = await this.pool.query(
+        'SELECT correct_answer FROM questions WHERE id = $1 AND deleted_at IS NULL',
+        [id],
+      );
+
+      if (existingResult.rows.length === 0) {
+        throw new NotFoundException(`Question with ID ${id} not found`);
+      }
+
+      existingQuestion = existingResult.rows[0];
+    }
+
     values.push(id);
 
     const result = await this.pool.query(
@@ -203,7 +226,28 @@ export class QuestionsService {
       throw new NotFoundException(`Question with ID ${id} not found`);
     }
 
-    return result.rows[0];
+    const updatedQuestion = result.rows[0];
+
+    if (
+      existingQuestion &&
+      this.normalizeAnswerForComparison(existingQuestion.correct_answer) !==
+        this.normalizeAnswerForComparison(updatedQuestion.correct_answer)
+    ) {
+      await this.pool.query(
+        `UPDATE student_answers sa
+         SET is_correct = COALESCE(NULLIF(LOWER(BTRIM(sa.answer_value)), ''), '') = ANY(
+           ARRAY(
+             SELECT BTRIM(option_value)
+             FROM unnest(string_to_array(LOWER($2), '|')) AS option_value
+           )
+         ),
+             updated_at = NOW()
+         WHERE sa.question_id = $1`,
+        [id, updatedQuestion.correct_answer],
+      );
+    }
+
+    return updatedQuestion;
   }
 
   async softDelete(id: string) {

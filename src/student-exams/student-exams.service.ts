@@ -112,7 +112,16 @@ export class StudentExamsService {
 
   async getStudentAnswers(studentExamId: string) {
     const result = await this.pool.query(
-      'SELECT * FROM student_answers WHERE student_exam_id = $1',
+      `SELECT sa.*,
+              q.correct_answer,
+              e.title AS exam_title,
+              e.title AS exam_name
+       FROM student_answers sa
+       JOIN questions q ON sa.question_id = q.id
+       JOIN student_exams se ON sa.student_exam_id = se.id
+       JOIN exams e ON se.exam_id = e.id
+       WHERE sa.student_exam_id = $1
+       ORDER BY q.section, q.module, q.order_index, sa.created_at`,
       [studentExamId],
     );
 
@@ -400,9 +409,12 @@ export class StudentExamsService {
       `SELECT se.*, 
               u.email as student_email,
               u.first_name,
-              u.last_name
+              u.last_name,
+              e.title as exam_title,
+              e.title as exam_name
        FROM student_exams se
        JOIN users u ON se.student_id = u.id
+       JOIN exams e ON se.exam_id = e.id
        WHERE se.exam_id = $1
        ORDER BY se.completed_at DESC NULLS LAST, se.started_at DESC`,
       [examId],
