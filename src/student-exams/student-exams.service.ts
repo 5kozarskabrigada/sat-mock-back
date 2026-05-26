@@ -103,7 +103,22 @@ export class StudentExamsService {
 
   async getStudentAnswers(studentExamId: string) {
     const result = await this.pool.query(
-      'SELECT * FROM student_answers WHERE student_exam_id = $1',
+      `SELECT
+         sa.id,
+         sa.student_exam_id,
+         sa.question_id,
+         sa.answer_value,
+         CASE
+           WHEN q.id IS NULL THEN sa.is_correct
+           ELSE sa.answer_value = q.correct_answer
+         END AS is_correct,
+         sa.time_spent,
+         sa.created_at,
+         sa.updated_at
+       FROM student_answers sa
+       LEFT JOIN questions q ON q.id = sa.question_id
+       WHERE sa.student_exam_id = $1
+       ORDER BY sa.question_id`,
       [studentExamId],
     );
 
@@ -420,16 +435,23 @@ export class StudentExamsService {
 
       // Fetch answers
       const answersResult = await this.pool.query(
-        `SELECT question_id, answer_value, is_correct
-         FROM student_answers
-         WHERE student_exam_id = $1`,
+        `SELECT
+           sa.question_id,
+           sa.answer_value,
+           CASE
+             WHEN q.id IS NULL THEN sa.is_correct
+             ELSE sa.answer_value = q.correct_answer
+           END AS is_correct
+         FROM student_answers sa
+         LEFT JOIN questions q ON q.id = sa.question_id
+         WHERE sa.student_exam_id = $1`,
         [studentExamId],
       );
 
       // Fetch questions
       const questionsResult = await this.pool.query(
         `SELECT id, domain, correct_answer, section, module, content
-         FROM exam_questions
+         FROM questions
          WHERE exam_id = $1 AND deleted_at IS NULL
          ORDER BY section, module, id`,
         [examData.exam_id],
