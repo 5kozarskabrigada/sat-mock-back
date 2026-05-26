@@ -1,4 +1,10 @@
-import { Injectable, Inject, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { Pool } from 'pg';
 import { PdfService } from '../pdf/pdf.service';
 import { EmailService } from '../email/email.service';
@@ -16,7 +22,10 @@ export class StudentExamsService {
     return error?.code === '40P01' || error?.code === '40001';
   }
 
-  private async withDeadlockRetry<T>(operation: () => Promise<T>, maxAttempts = 3): Promise<T> {
+  private async withDeadlockRetry<T>(
+    operation: () => Promise<T>,
+    maxAttempts = 3,
+  ): Promise<T> {
     let lastError: any;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -103,7 +112,15 @@ export class StudentExamsService {
 
   async getStudentAnswers(studentExamId: string) {
     const result = await this.pool.query(
-      'SELECT * FROM student_answers WHERE student_exam_id = $1',
+      `SELECT sa.*,
+              q.correct_answer,
+              e.title AS exam_name
+       FROM student_answers sa
+       JOIN questions q ON sa.question_id = q.id
+       JOIN student_exams se ON sa.student_exam_id = se.id
+       JOIN exams e ON se.exam_id = e.id
+       WHERE sa.student_exam_id = $1
+       ORDER BY q.section, q.module, q.order_index, sa.created_at`,
       [studentExamId],
     );
 
@@ -111,7 +128,12 @@ export class StudentExamsService {
   }
 
   // OPTIMIZED: Upsert answer with transaction for concurrent autosave
-  async saveAnswer(studentExamId: string, questionId: string, answerValue: string, studentId: string) {
+  async saveAnswer(
+    studentExamId: string,
+    questionId: string,
+    answerValue: string,
+    studentId: string,
+  ) {
     return this.withDeadlockRetry(async () => {
       const client = await this.pool.connect();
       try {
@@ -127,7 +149,9 @@ export class StudentExamsService {
         );
 
         if (verifyResult.rows.length === 0) {
-          throw new BadRequestException('Invalid exam attempt or exam already completed');
+          throw new BadRequestException(
+            'Invalid exam attempt or exam already completed',
+          );
         }
 
         const answerResult = await client.query(
@@ -156,7 +180,11 @@ export class StudentExamsService {
   }
 
   // OPTIMIZED: Batch save multiple answers at once (for bulk autosave)
-  async saveAnswersBatch(studentExamId: string, answers: Array<{ questionId: string; answerValue: string }>, studentId: string) {
+  async saveAnswersBatch(
+    studentExamId: string,
+    answers: Array<{ questionId: string; answerValue: string }>,
+    studentId: string,
+  ) {
     return this.withDeadlockRetry(async () => {
       const client = await this.pool.connect();
       try {
@@ -186,7 +214,9 @@ export class StudentExamsService {
         );
 
         if (verifyResult.rows.length === 0) {
-          throw new BadRequestException('Invalid exam attempt or exam already completed');
+          throw new BadRequestException(
+            'Invalid exam attempt or exam already completed',
+          );
         }
 
         const savedAnswersResult = await client.query(
@@ -264,14 +294,16 @@ export class StudentExamsService {
           math: { correct: 0, total: 0, byDomain: {} },
         };
 
-        const correctnessPayload: Array<{ id: string; is_correct: boolean }> = [];
+        const correctnessPayload: Array<{ id: string; is_correct: boolean }> =
+          [];
 
         for (const answer of answers) {
           const isCorrect = answer.correct_answer
-          .split('|')
-          .map((a: string) => a.trim().toLowerCase())
-          .includes(answer.answer_value?.trim().toLowerCase());
-          const section = answer.section === 'reading_writing' ? 'readingWriting' : 'math';
+            .split('|')
+            .map((a: string) => a.trim().toLowerCase())
+            .includes(answer.answer_value?.trim().toLowerCase());
+          const section =
+            answer.section === 'reading_writing' ? 'readingWriting' : 'math';
 
           scoreBreakdown[section].total++;
           if (isCorrect) {
@@ -280,7 +312,10 @@ export class StudentExamsService {
 
           if (answer.domain) {
             if (!scoreBreakdown[section].byDomain[answer.domain]) {
-              scoreBreakdown[section].byDomain[answer.domain] = { correct: 0, total: 0 };
+              scoreBreakdown[section].byDomain[answer.domain] = {
+                correct: 0,
+                total: 0,
+              };
             }
             scoreBreakdown[section].byDomain[answer.domain].total++;
             if (isCorrect) {
@@ -373,9 +408,11 @@ export class StudentExamsService {
       `SELECT se.*, 
               u.email as student_email,
               u.first_name,
-              u.last_name
+              u.last_name,
+              e.title as exam_name
        FROM student_exams se
        JOIN users u ON se.student_id = u.id
+       JOIN exams e ON se.exam_id = e.id
        WHERE se.exam_id = $1
        ORDER BY se.completed_at DESC NULLS LAST, se.started_at DESC`,
       [examId],
@@ -415,7 +452,9 @@ export class StudentExamsService {
       const studentEmail = customEmail || examData.student_email;
 
       if (!studentEmail || studentEmail.includes('@sat-platform.local')) {
-        throw new BadRequestException('Valid student email required to send report');
+        throw new BadRequestException(
+          'Valid student email required to send report',
+        );
       }
 
       // Fetch answers
@@ -439,18 +478,40 @@ export class StudentExamsService {
       const questions = questionsResult.rows;
 
       // Calculate scores
-      const rwQuestions = questions.filter((q) => q.section === 'reading_writing');
+      const rwQuestions = questions.filter(
+        (q) => q.section === 'reading_writing',
+      );
       const mathQuestions = questions.filter((q) => q.section === 'math');
 
-      const rwM1Questions = questions.filter((q) => q.section === 'reading_writing' && q.module === 1);
-      const rwM2Questions = questions.filter((q) => q.section === 'reading_writing' && q.module === 2);
-      const mathM1Questions = questions.filter((q) => q.section === 'math' && q.module === 1);
-      const mathM2Questions = questions.filter((q) => q.section === 'math' && q.module === 2);
+      const rwM1Questions = questions.filter(
+        (q) => q.section === 'reading_writing' && q.module === 1,
+      );
+      const rwM2Questions = questions.filter(
+        (q) => q.section === 'reading_writing' && q.module === 2,
+      );
+      const mathM1Questions = questions.filter(
+        (q) => q.section === 'math' && q.module === 1,
+      );
+      const mathM2Questions = questions.filter(
+        (q) => q.section === 'math' && q.module === 2,
+      );
 
-      const rwM1Correct = answers.filter((a) => a.is_correct && rwM1Questions.some((q) => q.id === a.question_id)).length;
-      const rwM2Correct = answers.filter((a) => a.is_correct && rwM2Questions.some((q) => q.id === a.question_id)).length;
-      const mathM1Correct = answers.filter((a) => a.is_correct && mathM1Questions.some((q) => q.id === a.question_id)).length;
-      const mathM2Correct = answers.filter((a) => a.is_correct && mathM2Questions.some((q) => q.id === a.question_id)).length;
+      const rwM1Correct = answers.filter(
+        (a) =>
+          a.is_correct && rwM1Questions.some((q) => q.id === a.question_id),
+      ).length;
+      const rwM2Correct = answers.filter(
+        (a) =>
+          a.is_correct && rwM2Questions.some((q) => q.id === a.question_id),
+      ).length;
+      const mathM1Correct = answers.filter(
+        (a) =>
+          a.is_correct && mathM1Questions.some((q) => q.id === a.question_id),
+      ).length;
+      const mathM2Correct = answers.filter(
+        (a) =>
+          a.is_correct && mathM2Questions.some((q) => q.id === a.question_id),
+      ).length;
 
       // Simplified SAT scoring (you may want to use the actual conversion tables)
       const rwScore = this.calculateRWScore(rwM1Correct, rwM2Correct);
@@ -459,10 +520,26 @@ export class StudentExamsService {
 
       // Module summaries
       const moduleSummaries = [
-        { label: 'Reading & Writing Module 1', correct: rwM1Correct, total: rwM1Questions.length },
-        { label: 'Reading & Writing Module 2', correct: rwM2Correct, total: rwM2Questions.length },
-        { label: 'Math Module 1', correct: mathM1Correct, total: mathM1Questions.length },
-        { label: 'Math Module 2', correct: mathM2Correct, total: mathM2Questions.length },
+        {
+          label: 'Reading & Writing Module 1',
+          correct: rwM1Correct,
+          total: rwM1Questions.length,
+        },
+        {
+          label: 'Reading & Writing Module 2',
+          correct: rwM2Correct,
+          total: rwM2Questions.length,
+        },
+        {
+          label: 'Math Module 1',
+          correct: mathM1Correct,
+          total: mathM1Questions.length,
+        },
+        {
+          label: 'Math Module 2',
+          correct: mathM2Correct,
+          total: mathM2Questions.length,
+        },
       ].filter((m) => m.total > 0);
 
       // Domain scores
@@ -470,7 +547,8 @@ export class StudentExamsService {
       const domainScores = domains.map((domain) => {
         const domainQuestions = questions.filter((q) => q.domain === domain);
         const correct = answers.filter(
-          (a) => a.is_correct && domainQuestions.some((q) => q.id === a.question_id),
+          (a) =>
+            a.is_correct && domainQuestions.some((q) => q.id === a.question_id),
         ).length;
         return {
           domain,
@@ -482,21 +560,32 @@ export class StudentExamsService {
 
       // Section breakdowns
       const moduleGroups = [
-        { label: 'Reading & Writing Module 1', section: 'reading_writing', module: 1 },
-        { label: 'Reading & Writing Module 2', section: 'reading_writing', module: 2 },
+        {
+          label: 'Reading & Writing Module 1',
+          section: 'reading_writing',
+          module: 1,
+        },
+        {
+          label: 'Reading & Writing Module 2',
+          section: 'reading_writing',
+          module: 2,
+        },
         { label: 'Math Module 1', section: 'math', module: 1 },
         { label: 'Math Module 2', section: 'math', module: 2 },
       ];
 
       const sectionBreakdowns = moduleGroups
         .map((group) => {
-          const moduleQuestions = questions.filter((q) => q.section === group.section && q.module === group.module);
+          const moduleQuestions = questions.filter(
+            (q) => q.section === group.section && q.module === group.module,
+          );
 
           if (moduleQuestions.length === 0) return null;
 
           const questionDetails = moduleQuestions.map((question, index) => {
             const answer = answers.find((a) => a.question_id === question.id);
-            const result: 'Correct' | 'Incorrect' | 'Skipped' = answer?.is_correct ? 'Correct' : answer ? 'Incorrect' : 'Skipped';
+            const result: 'Correct' | 'Incorrect' | 'Skipped' =
+              answer?.is_correct ? 'Correct' : answer ? 'Incorrect' : 'Skipped';
 
             return {
               number: index + 1,
@@ -509,7 +598,8 @@ export class StudentExamsService {
 
           return {
             label: group.label,
-            correct: questionDetails.filter((q) => q.result === 'Correct').length,
+            correct: questionDetails.filter((q) => q.result === 'Correct')
+              .length,
             total: questionDetails.length,
             questions: questionDetails,
           };

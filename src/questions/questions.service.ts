@@ -1,11 +1,29 @@
-import { Injectable, Inject, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Pool } from 'pg';
 
 @Injectable()
 export class QuestionsService {
   constructor(@Inject('DATABASE_POOL') private pool: Pool) {}
 
-  private async getNextOrderIndex(examId: string, section: string, module: number) {
+  private normalizeAnswerForComparison(answer: string | null | undefined) {
+    return (answer ?? '')
+      .split('|')
+      .map((value) => value.trim().toLowerCase())
+      .filter((value) => value.length > 0)
+      .sort()
+      .join('|');
+  }
+
+  private async getNextOrderIndex(
+    examId: string,
+    section: string,
+    module: number,
+  ) {
     const result = await this.pool.query(
       `SELECT COALESCE(MAX(order_index), 0) AS max_order
        FROM questions
@@ -41,17 +59,31 @@ export class QuestionsService {
 
   async create(questionData: any) {
     const examId = questionData.exam_id ?? questionData.examId;
-    const correctAnswer = questionData.correct_answer ?? questionData.correctAnswer;
-    const equationLatex = questionData.equation_latex ?? questionData.equationLatex;
+    const correctAnswer =
+      questionData.correct_answer ?? questionData.correctAnswer;
+    const equationLatex =
+      questionData.equation_latex ?? questionData.equationLatex;
 
-    if (!examId || !questionData.section || questionData.module === undefined || !questionData.content || !correctAnswer) {
-      throw new BadRequestException('Missing required fields: exam_id/examId, section, module, content, correct_answer/correctAnswer');
+    if (
+      !examId ||
+      !questionData.section ||
+      questionData.module === undefined ||
+      !questionData.content ||
+      !correctAnswer
+    ) {
+      throw new BadRequestException(
+        'Missing required fields: exam_id/examId, section, module, content, correct_answer/correctAnswer',
+      );
     }
 
     const orderIndex =
       questionData.order_index ??
       questionData.orderIndex ??
-      (await this.getNextOrderIndex(examId, questionData.section, questionData.module));
+      (await this.getNextOrderIndex(
+        examId,
+        questionData.section,
+        questionData.module,
+      ));
 
     const result = await this.pool.query(
       `INSERT INTO questions (exam_id, section, module, content, correct_answer, explanation, domain, equation_latex, order_index, created_at)
@@ -88,7 +120,9 @@ export class QuestionsService {
       const createdQuestions: any[] = [];
       for (const q of questions) {
         const orderIndex =
-          q.order_index ?? q.orderIndex ?? (await this.getNextOrderIndex(examId, q.section, q.module));
+          q.order_index ??
+          q.orderIndex ??
+          (await this.getNextOrderIndex(examId, q.section, q.module));
 
         const result = await client.query(
           `INSERT INTO questions (exam_id, section, module, content, correct_answer, explanation, domain, equation_latex, order_index, created_at)
@@ -142,7 +176,8 @@ export class QuestionsService {
       fields.push(`content = $${paramIndex++}`);
       values.push(JSON.stringify(questionData.content));
     }
-    const correctAnswer = questionData.correct_answer ?? questionData.correctAnswer;
+    const correctAnswer =
+      questionData.correct_answer ?? questionData.correctAnswer;
     if (correctAnswer !== undefined) {
       fields.push(`correct_answer = $${paramIndex++}`);
       values.push(correctAnswer);
@@ -155,7 +190,8 @@ export class QuestionsService {
       fields.push(`domain = $${paramIndex++}`);
       values.push(questionData.domain);
     }
-    const equationLatex = questionData.equation_latex ?? questionData.equationLatex;
+    const equationLatex =
+      questionData.equation_latex ?? questionData.equationLatex;
     if (equationLatex !== undefined) {
       fields.push(`equation_latex = $${paramIndex++}`);
       values.push(equationLatex);
@@ -163,6 +199,20 @@ export class QuestionsService {
 
     if (fields.length === 0) {
       throw new BadRequestException('No valid fields provided for update');
+    }
+
+    let existingQuestion: { correct_answer: string } | null = null;
+    if (correctAnswer !== undefined) {
+      const existingResult = await this.pool.query(
+        'SELECT correct_answer FROM questions WHERE id = $1 AND deleted_at IS NULL',
+        [id],
+      );
+
+      if (existingResult.rows.length === 0) {
+        throw new NotFoundException(`Question with ID ${id} not found`);
+      }
+
+      existingQuestion = existingResult.rows[0];
     }
 
     values.push(id);
@@ -176,7 +226,32 @@ export class QuestionsService {
       throw new NotFoundException(`Question with ID ${id} not found`);
     }
 
-    return result.rows[0];
+    const updatedQuestion = result.rows[0];
+
+    if (
+      existingQuestion &&
+      this.normalizeAnswerForComparison(existingQuestion.correct_answer) !==
+        this.normalizeAnswerForComparison(updatedQuestion.correct_answer)
+    ) {
+      await this.pool.query(
+        `UPDATE student_answers sa
+         SET is_correct = CASE
+           WHEN sa.answer_value IS NULL OR BTRIM(sa.answer_value) = '' THEN FALSE
+           ELSE LOWER(BTRIM(sa.answer_value)) = ANY(
+             ARRAY(
+               SELECT BTRIM(option_value)
+               FROM unnest(string_to_array(LOWER($2), '|')) AS option_value
+               WHERE BTRIM(option_value) <> ''
+             )
+           )
+         END,
+             updated_at = NOW()
+         WHERE sa.question_id = $1`,
+        [id, updatedQuestion.correct_answer],
+      );
+    }
+
+    return updatedQuestion;
   }
 
   async softDelete(id: string) {
@@ -236,8 +311,15 @@ export class QuestionsService {
   ) {
     const { section, module, questionIdsInOrder } = data;
 
-    if (!section || module === undefined || !Array.isArray(questionIdsInOrder) || questionIdsInOrder.length === 0) {
-      throw new BadRequestException('section, module, and questionIdsInOrder are required');
+    if (
+      !section ||
+      module === undefined ||
+      !Array.isArray(questionIdsInOrder) ||
+      questionIdsInOrder.length === 0
+    ) {
+      throw new BadRequestException(
+        'section, module, and questionIdsInOrder are required',
+      );
     }
 
     const client = await this.pool.connect();
@@ -256,12 +338,16 @@ export class QuestionsService {
 
       const validIds = new Set(validRows.rows.map((row) => row.id));
       if (validIds.size !== questionIdsInOrder.length) {
-        throw new BadRequestException('questionIdsInOrder must include all questions in this section/module');
+        throw new BadRequestException(
+          'questionIdsInOrder must include all questions in this section/module',
+        );
       }
 
       for (const id of questionIdsInOrder) {
         if (!validIds.has(id)) {
-          throw new BadRequestException('questionIdsInOrder contains invalid question ids');
+          throw new BadRequestException(
+            'questionIdsInOrder contains invalid question ids',
+          );
         }
       }
 
