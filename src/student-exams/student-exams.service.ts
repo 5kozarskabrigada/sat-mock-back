@@ -114,7 +114,6 @@ export class StudentExamsService {
     const result = await this.pool.query(
       `SELECT sa.*,
               q.correct_answer,
-              e.title AS exam_title,
               e.title AS exam_name
        FROM student_answers sa
        JOIN questions q ON sa.question_id = q.id
@@ -410,7 +409,6 @@ export class StudentExamsService {
               u.email as student_email,
               u.first_name,
               u.last_name,
-              e.title as exam_title,
               e.title as exam_name
        FROM student_exams se
        JOIN users u ON se.student_id = u.id

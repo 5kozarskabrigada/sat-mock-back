@@ -235,12 +235,16 @@ export class QuestionsService {
     ) {
       await this.pool.query(
         `UPDATE student_answers sa
-         SET is_correct = COALESCE(NULLIF(LOWER(BTRIM(sa.answer_value)), ''), '') = ANY(
-           ARRAY(
-             SELECT BTRIM(option_value)
-             FROM unnest(string_to_array(LOWER($2), '|')) AS option_value
+         SET is_correct = CASE
+           WHEN sa.answer_value IS NULL OR BTRIM(sa.answer_value) = '' THEN FALSE
+           ELSE LOWER(BTRIM(sa.answer_value)) = ANY(
+             ARRAY(
+               SELECT BTRIM(option_value)
+               FROM unnest(string_to_array(LOWER($2), '|')) AS option_value
+               WHERE BTRIM(option_value) <> ''
+             )
            )
-         ),
+         END,
              updated_at = NOW()
          WHERE sa.question_id = $1`,
         [id, updatedQuestion.correct_answer],
