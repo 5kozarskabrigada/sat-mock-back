@@ -19,6 +19,17 @@ export class StudentExamsService {
     return (value ?? '').toString().trim().toLowerCase();
   }
 
+  private isAnswerCorrect(answerValue: string | null | undefined, correctAnswer: string | null | undefined): boolean {
+    const normalizedStudentAnswer = this.normalizeAnswer(answerValue);
+    const acceptedAnswers = (correctAnswer ?? '')
+      .toString()
+      .split('|')
+      .map((answer) => this.normalizeAnswer(answer))
+      .filter((answer) => answer.length > 0);
+
+    return acceptedAnswers.includes(normalizedStudentAnswer);
+  }
+
   private async withDeadlockRetry<T>(operation: () => Promise<T>, maxAttempts = 3): Promise<T> {
     let lastError: any;
 
@@ -111,10 +122,7 @@ export class StudentExamsService {
          sa.student_exam_id,
          sa.question_id,
          sa.answer_value,
-         CASE
-           WHEN q.id IS NULL THEN NULL
-           ELSE lower(btrim(COALESCE(sa.answer_value, ''))) = lower(btrim(COALESCE(q.correct_answer, '')))
-         END AS is_correct,
+         q.correct_answer,
          sa.time_spent,
          sa.created_at,
          sa.updated_at
@@ -125,7 +133,10 @@ export class StudentExamsService {
       [studentExamId],
     );
 
-    return result.rows;
+    return result.rows.map((row) => ({
+      ...row,
+      is_correct: row.correct_answer ? this.isAnswerCorrect(row.answer_value, row.correct_answer) : null,
+    }));
   }
 
   // OPTIMIZED: Upsert answer with transaction for concurrent autosave
@@ -285,8 +296,7 @@ export class StudentExamsService {
         const correctnessPayload: Array<{ id: string; is_correct: boolean }> = [];
 
         for (const answer of answers) {
-          const isCorrect =
-            this.normalizeAnswer(answer.answer_value) === this.normalizeAnswer(answer.correct_answer);
+          const isCorrect = this.isAnswerCorrect(answer.answer_value, answer.correct_answer);
           const section = answer.section === 'reading_writing' ? 'readingWriting' : 'math';
 
           scoreBreakdown[section].total++;
@@ -439,10 +449,7 @@ export class StudentExamsService {
         `SELECT
            sa.question_id,
            sa.answer_value,
-           CASE
-             WHEN q.id IS NULL THEN NULL
-             ELSE lower(btrim(COALESCE(sa.answer_value, ''))) = lower(btrim(COALESCE(q.correct_answer, '')))
-           END AS is_correct
+           q.correct_answer
          FROM student_answers sa
          LEFT JOIN questions q ON q.id = sa.question_id
          WHERE sa.student_exam_id = $1`,
@@ -458,7 +465,10 @@ export class StudentExamsService {
         [examData.exam_id],
       );
 
-      const answers = answersResult.rows;
+      const answers = answersResult.rows.map((row) => ({
+        ...row,
+        is_correct: row.correct_answer ? this.isAnswerCorrect(row.answer_value, row.correct_answer) : null,
+      }));
       const questions = questionsResult.rows;
 
       // Calculate scores
