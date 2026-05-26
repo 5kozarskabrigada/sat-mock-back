@@ -15,7 +15,10 @@ export class UsageController {
    * Returns per-user usage stats for cost attribution.
    */
   @Get('per-student')
-  async getPerStudentUsage(@Query('from') from?: string, @Query('to') to?: string) {
+  async getPerStudentUsage(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
     return this.usageService.getPerStudentUsage(from, to);
   }
 
@@ -24,7 +27,10 @@ export class UsageController {
    * High-level usage summary.
    */
   @Get('summary')
-  async getUsageSummary(@Query('from') from?: string, @Query('to') to?: string) {
+  async getUsageSummary(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
     return this.usageService.getUsageSummary(from, to);
   }
 }

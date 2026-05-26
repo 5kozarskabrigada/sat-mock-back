@@ -5,12 +5,24 @@ import { Pool } from 'pg';
 export class ActivityLogsService {
   constructor(@Inject('DATABASE_POOL') private pool: Pool) {}
 
-  async create(logData: { userId: string; studentExamId?: string; examId?: string; type: string; details?: string }) {
+  async create(logData: {
+    userId: string;
+    studentExamId?: string;
+    examId?: string;
+    type: string;
+    details?: string;
+  }) {
     const result = await this.pool.query(
       `INSERT INTO activity_logs (user_id, student_exam_id, exam_id, type, details, created_at)
        VALUES ($1, $2, $3, $4, $5, NOW())
        RETURNING *`,
-      [logData.userId, logData.studentExamId, logData.examId, logData.type, logData.details],
+      [
+        logData.userId,
+        logData.studentExamId,
+        logData.examId,
+        logData.type,
+        logData.details,
+      ],
     );
 
     return result.rows[0];

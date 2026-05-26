@@ -47,7 +47,11 @@ export class UsersController {
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() userData: any, @Request() req: any) {
+  async update(
+    @Param('id') id: string,
+    @Body() userData: any,
+    @Request() req: any,
+  ) {
     // Students can only update their own profile
     if (req.user.role === 'student' && id !== req.user.id) {
       return { error: 'Unauthorized' };

@@ -11,7 +11,8 @@ export class UsersService {
   ) {}
 
   async findAll(filters?: { role?: string }) {
-    let query = 'SELECT id, email, username, first_name, last_name, role, created_at, email_verified FROM users';
+    let query =
+      'SELECT id, email, username, first_name, last_name, role, created_at, email_verified FROM users';
     const params: any[] = [];
     let paramIndex = 1;
 
@@ -61,7 +62,13 @@ export class UsersService {
         `INSERT INTO users (email, username, first_name, last_name, role, email_verified, created_at, updated_at) 
          VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), NOW()) 
          RETURNING id, email, username, first_name, last_name, role, created_at`,
-        [userData.email, userData.username, userData.firstName, userData.lastName, role],
+        [
+          userData.email,
+          userData.username,
+          userData.firstName,
+          userData.lastName,
+          role,
+        ],
       );
 
       const user = userResult.rows[0];
@@ -76,7 +83,10 @@ export class UsersService {
       await client.query('COMMIT');
 
       // Send welcome email if requested and email is not a placeholder
-      if (userData.sendEmail && !userData.email.includes('@sat-platform.local')) {
+      if (
+        userData.sendEmail &&
+        !userData.email.includes('@sat-platform.local')
+      ) {
         try {
           await this.emailService.sendWelcomeEmail(userData.email, {
             firstName: userData.firstName,
@@ -94,18 +104,27 @@ export class UsersService {
       return { user, password: userData.password };
     } catch (error) {
       await client.query('ROLLBACK');
-      
+
       // Handle specific database errors
-      if (error.code === '23505') { // Unique constraint violation
-        if (error.constraint === 'users_email_key' || error.detail?.includes('email')) {
-          throw new Error('This email address is already registered. Please use a different email.');
+      if (error.code === '23505') {
+        // Unique constraint violation
+        if (
+          error.constraint === 'users_email_key' ||
+          error.detail?.includes('email')
+        ) {
+          throw new Error(
+            'This email address is already registered. Please use a different email.',
+          );
         }
-        if (error.constraint === 'users_username_key' || error.detail?.includes('username')) {
+        if (
+          error.constraint === 'users_username_key' ||
+          error.detail?.includes('username')
+        ) {
           throw new Error('This username is already taken. Please try again.');
         }
         throw new Error('A user with this information already exists.');
       }
-      
+
       throw error;
     } finally {
       client.release();

@@ -46,8 +46,7 @@ export class ImagesController {
         throw new BadRequestException('File size must be less than 5MB');
       }
 
-      const extension =
-        data.filename.split('.').pop()?.toLowerCase() || 'bin';
+      const extension = data.filename.split('.').pop()?.toLowerCase() || 'bin';
       const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
 
       const result = await this.imagesService.uploadImage(

@@ -90,10 +90,7 @@ export class PdfService {
 
       // Student Information Box
       const studentBoxY = doc.y;
-      doc
-        .fillColor(lightGray)
-        .rect(50, studentBoxY, 495, 80)
-        .fill();
+      doc.fillColor(lightGray).rect(50, studentBoxY, 495, 80).fill();
 
       doc
         .fillColor(primaryColor)
@@ -105,7 +102,11 @@ export class PdfService {
         .fillColor(darkGray)
         .fontSize(10)
         .font('Helvetica')
-        .text(`Name: ${reportData.student.firstName} ${reportData.student.lastName}`, 65, studentBoxY + 35)
+        .text(
+          `Name: ${reportData.student.firstName} ${reportData.student.lastName}`,
+          65,
+          studentBoxY + 35,
+        )
         .text(`Username: ${reportData.student.username}`, 65, studentBoxY + 50);
 
       if (reportData.student.email) {
@@ -128,16 +129,17 @@ export class PdfService {
         .text('Completed:', 320, studentBoxY + 50)
         .fillColor(darkGray)
         .font('Helvetica')
-        .text(new Date(reportData.exam.completedAt).toLocaleDateString(), 380, studentBoxY + 50);
+        .text(
+          new Date(reportData.exam.completedAt).toLocaleDateString(),
+          380,
+          studentBoxY + 50,
+        );
 
       doc.moveDown(5);
 
       // Total Score - Big Display
       const scoreBoxY = doc.y + 20;
-      doc
-        .fillColor(primaryColor)
-        .rect(50, scoreBoxY, 495, 100)
-        .fill();
+      doc.fillColor(primaryColor).rect(50, scoreBoxY, 495, 100).fill();
 
       doc
         .fillColor('white')
@@ -148,7 +150,9 @@ export class PdfService {
       doc
         .fontSize(48)
         .font('Helvetica-Bold')
-        .text(reportData.totalScore.toString(), 0, scoreBoxY + 45, { align: 'center' });
+        .text(reportData.totalScore.toString(), 0, scoreBoxY + 45, {
+          align: 'center',
+        });
 
       doc
         .fontSize(12)
@@ -172,11 +176,17 @@ export class PdfService {
         .fillColor('white')
         .fontSize(12)
         .font('Helvetica-Bold')
-        .text('Reading & Writing', 60, sectionScoreY + 15, { width: boxWidth, align: 'center' });
+        .text('Reading & Writing', 60, sectionScoreY + 15, {
+          width: boxWidth,
+          align: 'center',
+        });
 
       doc
         .fontSize(32)
-        .text(reportData.rwScore.toString(), 60, sectionScoreY + 35, { width: boxWidth, align: 'center' });
+        .text(reportData.rwScore.toString(), 60, sectionScoreY + 35, {
+          width: boxWidth,
+          align: 'center',
+        });
 
       // Math Score Box
       doc
@@ -188,11 +198,17 @@ export class PdfService {
         .fillColor('white')
         .fontSize(12)
         .font('Helvetica-Bold')
-        .text('Math', 305, sectionScoreY + 15, { width: boxWidth, align: 'center' });
+        .text('Math', 305, sectionScoreY + 15, {
+          width: boxWidth,
+          align: 'center',
+        });
 
       doc
         .fontSize(32)
-        .text(reportData.mathScore.toString(), 305, sectionScoreY + 35, { width: boxWidth, align: 'center' });
+        .text(reportData.mathScore.toString(), 305, sectionScoreY + 35, {
+          width: boxWidth,
+          align: 'center',
+        });
 
       doc.moveDown(6);
 
@@ -221,7 +237,11 @@ export class PdfService {
           doc
             .fontSize(9)
             .font('Helvetica')
-            .text(`${module.correct} / ${module.total} correct (${percentage}%)`, xPos, yPos + 15);
+            .text(
+              `${module.correct} / ${module.total} correct (${percentage}%)`,
+              xPos,
+              yPos + 15,
+            );
 
           // Progress bar
           const barWidth = 200;
@@ -234,7 +254,13 @@ export class PdfService {
             .fill();
 
           doc
-            .fillColor(percentage >= 70 ? accentGreen : percentage >= 50 ? '#f59e0b' : accentRed)
+            .fillColor(
+              percentage >= 70
+                ? accentGreen
+                : percentage >= 50
+                  ? '#f59e0b'
+                  : accentRed,
+            )
             .rect(xPos, yPos + 30, fillWidth, barHeight)
             .fill();
         });
@@ -265,7 +291,11 @@ export class PdfService {
           doc
             .fontSize(9)
             .font('Helvetica')
-            .text(`${domain.correct} / ${domain.total} (${Math.round(domain.percentage)}%)`, 60, yPos + 15);
+            .text(
+              `${domain.correct} / ${domain.total} (${Math.round(domain.percentage)}%)`,
+              60,
+              yPos + 15,
+            );
 
           // Progress bar
           const barWidth = 400;
@@ -278,14 +308,23 @@ export class PdfService {
             .fill();
 
           doc
-            .fillColor(domain.percentage >= 70 ? accentGreen : domain.percentage >= 50 ? '#f59e0b' : accentRed)
+            .fillColor(
+              domain.percentage >= 70
+                ? accentGreen
+                : domain.percentage >= 50
+                  ? '#f59e0b'
+                  : accentRed,
+            )
             .rect(60, yPos + 28, fillWidth, barHeight)
             .fill();
         });
       }
 
       // Question-by-Question Breakdown
-      if (reportData.sectionBreakdowns && reportData.sectionBreakdowns.length > 0) {
+      if (
+        reportData.sectionBreakdowns &&
+        reportData.sectionBreakdowns.length > 0
+      ) {
         doc.addPage();
         doc
           .fillColor(primaryColor)
@@ -320,13 +359,19 @@ export class PdfService {
             }
 
             const resultColor =
-              question.result === 'Correct' ? accentGreen : question.result === 'Incorrect' ? accentRed : '#6b7280';
+              question.result === 'Correct'
+                ? accentGreen
+                : question.result === 'Incorrect'
+                  ? accentRed
+                  : '#6b7280';
 
             doc
               .fontSize(8)
               .fillColor(darkGray)
               .font('Helvetica')
-              .text(`Q${question.number}: ${question.domain}`, 60, doc.y, { continued: true })
+              .text(`Q${question.number}: ${question.domain}`, 60, doc.y, {
+                continued: true,
+              })
               .fillColor(resultColor)
               .font('Helvetica-Bold')
               .text(` • ${question.result}`, { continued: false });
@@ -335,7 +380,10 @@ export class PdfService {
               .fontSize(7)
               .fillColor('#6b7280')
               .font('Helvetica')
-              .text(`Correct: ${question.correctAnswer} | Your answer: ${question.studentAnswer}`, 60)
+              .text(
+                `Correct: ${question.correctAnswer} | Your answer: ${question.studentAnswer}`,
+                60,
+              )
               .moveDown(0.3);
           });
 
@@ -344,7 +392,10 @@ export class PdfService {
       }
 
       // Security Information
-      if (reportData.lockdownViolations !== undefined && reportData.lockdownViolations > 0) {
+      if (
+        reportData.lockdownViolations !== undefined &&
+        reportData.lockdownViolations > 0
+      ) {
         doc.addPage();
         doc
           .fillColor(accentRed)
@@ -359,7 +410,8 @@ export class PdfService {
           .font('Helvetica')
           .text(
             `This exam recorded ${reportData.lockdownViolations} lockdown violation(s). Violations occur when the student attempts to leave the exam window or access other applications during the test.`,
-            50, doc.y,
+            50,
+            doc.y,
             { width: 495 },
           );
       }

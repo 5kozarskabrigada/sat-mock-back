@@ -34,7 +34,14 @@ export class UsageTrackerMiddleware implements NestMiddleware {
         await this.pool.query(
           `INSERT INTO request_usage (user_id, user_role, method, path, status_code, response_time_ms)
            VALUES ($1, $2, $3, $4, $5, $6)`,
-          [userId, userRole, method, path, res.statusCode, Math.round(elapsedMs)],
+          [
+            userId,
+            userRole,
+            method,
+            path,
+            res.statusCode,
+            Math.round(elapsedMs),
+          ],
         );
       } catch (err: any) {
         if (!this.warned) {

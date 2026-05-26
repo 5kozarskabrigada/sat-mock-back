@@ -53,7 +53,10 @@ export class ClassroomsController {
 
   @Post(':id/students')
   @Roles('admin')
-  async addStudent(@Param('id') id: string, @Body() data: { studentId: string }) {
+  async addStudent(
+    @Param('id') id: string,
+    @Body() data: { studentId: string },
+  ) {
     return this.classroomsService.addStudent(id, data.studentId);
   }
 
