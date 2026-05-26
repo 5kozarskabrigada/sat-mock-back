@@ -23,18 +23,37 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Check password with Better Auth account table
-    const accountResult = await this.pool.query(
-      'SELECT password FROM accounts WHERE user_id = $1 AND provider_id = $2',
-      [user.id, 'credential'],
-    );
+    // Check password with Better Auth account table.
+    // Some deployments use `provider_id`, others `provided_id`.
+    let accountResult;
+    try {
+      accountResult = await this.pool.query(
+        'SELECT password FROM accounts WHERE user_id = $1 AND provider_id = $2',
+        [user.id, 'credential'],
+      );
+    } catch (error: any) {
+      if (error?.code !== '42703') {
+        throw error;
+      }
+
+      accountResult = await this.pool.query(
+        'SELECT password FROM accounts WHERE user_id = $1 AND provided_id = $2',
+        [user.id, 'credential'],
+      );
+    }
 
     const account = accountResult.rows[0];
     if (!account || !account.password) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const isPasswordValid = await bcrypt.compare(password, account.password);
+    let isPasswordValid = false;
+    try {
+      isPasswordValid = await bcrypt.compare(password, account.password);
+    } catch {
+      // Invalid/unsupported hash format should not surface as 500.
+      throw new UnauthorizedException('Invalid credentials');
+    }
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
