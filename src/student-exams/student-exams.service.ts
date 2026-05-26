@@ -15,6 +15,9 @@ export class StudentExamsService {
   private isRetryableDbError(error: any) {
     return error?.code === '40P01' || error?.code === '40001';
   }
+  private normalizeAnswer(value: string | null | undefined): string {
+    return (value ?? '').toString().trim().toLowerCase();
+  }
 
   private async withDeadlockRetry<T>(operation: () => Promise<T>, maxAttempts = 3): Promise<T> {
     let lastError: any;
@@ -109,8 +112,8 @@ export class StudentExamsService {
          sa.question_id,
          sa.answer_value,
          CASE
-           WHEN q.id IS NULL THEN sa.is_correct
-           ELSE sa.answer_value = q.correct_answer
+           WHEN q.id IS NULL THEN NULL
+           ELSE lower(btrim(COALESCE(sa.answer_value, ''))) = lower(btrim(COALESCE(q.correct_answer, '')))
          END AS is_correct,
          sa.time_spent,
          sa.created_at,
@@ -293,7 +296,8 @@ export class StudentExamsService {
             scoreBreakdown[section].correct++;
           }
 
-          if (answer.domain) {
+                    const isCorrect =
+                      this.normalizeAnswer(answer.answer_value) === this.normalizeAnswer(answer.correct_answer);
             if (!scoreBreakdown[section].byDomain[answer.domain]) {
               scoreBreakdown[section].byDomain[answer.domain] = { correct: 0, total: 0 };
             }
@@ -439,8 +443,8 @@ export class StudentExamsService {
            sa.question_id,
            sa.answer_value,
            CASE
-             WHEN q.id IS NULL THEN sa.is_correct
-             ELSE sa.answer_value = q.correct_answer
+             WHEN q.id IS NULL THEN NULL
+             ELSE lower(btrim(COALESCE(sa.answer_value, ''))) = lower(btrim(COALESCE(q.correct_answer, '')))
            END AS is_correct
          FROM student_answers sa
          LEFT JOIN questions q ON q.id = sa.question_id
